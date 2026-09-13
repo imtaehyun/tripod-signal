@@ -282,6 +282,17 @@ def main() -> None:
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, ensure_ascii=False, separators=(",", ":"))
     print(f"signal.json written: {os.path.getsize(path) / 1024:.0f} KB")
+
+    # Same payload wrapped as a script assignment. A <script src> is not subject
+    # to CORS, so this is what makes index.html work when it is opened by
+    # double-clicking the file (file:// origin), where fetch() is blocked.
+    # signal.json stays the canonical artifact for any other consumer.
+    js_path = os.path.join(DATA, "signal.js")
+    with open(js_path, "w", encoding="utf-8") as fh:
+        fh.write("window.__SIGNAL__=")
+        json.dump(out, fh, ensure_ascii=False, separators=(",", ":"))
+        fh.write(";\n")
+    print(f"signal.js  written: {os.path.getsize(js_path) / 1024:.0f} KB")
     print(f"  latest {latest['date']}  ->  {latest['gear']} ({latest['label']})"
           f"  action_required={latest['action_required']}")
 

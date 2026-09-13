@@ -6,6 +6,10 @@
 <title>트라이팟 시그널</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📐</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<!-- Sets window.__SIGNAL__. A script tag is exempt from CORS, so this is the
+     path that works when the file is opened directly (file://), where fetch()
+     is blocked. Failure here is silent and handled by the fetch fallback. -->
+<script src="data/signal.js" onerror="window.__SIGNAL_SCRIPT_FAILED__=1"></script>
 <style>
   @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
   :root { color-scheme: dark; }
@@ -388,10 +392,24 @@ function render(d) {
   app.replaceChildren(node);
 }
 
-fetch(`data/signal.json?v=${Date.now()}`)
-  .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-  .then(render)
-  .catch(e => fail(`data/signal.json — ${e.message}`));
+/* data/signal.js sets window.__SIGNAL__ and works from any origin including
+   file://. Over http the fetch path is preferred so a cached signal.js can
+   never win over fresh data. */
+const embedded = window.__SIGNAL__;
+const isFile = location.protocol === 'file:';
+
+if (isFile) {
+  embedded
+    ? render(embedded)
+    : fail('data/signal.js 를 찾을 수 없다. <code class="text-slate-300">python scripts/signal.py</code> 를 실행해 생성하라.');
+} else {
+  fetch(`data/signal.json?v=${Date.now()}`)
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+    .then(render)
+    .catch(e => embedded
+      ? render(embedded)
+      : fail(`data/signal.json — ${e.message}`));
+}
 </script>
 </body>
 </html>

@@ -84,6 +84,8 @@ scripts/fetch.py        NDX + VIX closes -> data/*.csv (append-only)
 scripts/signal.py       full replay -> data/signal.json (regenerated wholesale)
 data/ndx.csv            Nasdaq-100 closes, 1985-10-01 ->   (Yahoo Finance)
 data/vix.csv            VIX closes, 1990-01-02 ->          (CBOE, official)
+data/signal.json        canonical derived output
+data/signal.js          same payload as a <script> assignment, for file://
 CONTEXT.md              glossary — regime vs gear, dd52 vs MDD, etc.
 docs/adr/               why the three non-obvious decisions were made
 ```
@@ -101,6 +103,9 @@ python scripts/fetch.py            # thereafter: incremental
 python scripts/signal.py --stats   # rebuild data/signal.json, print validation
 python -m http.server 8000         # then open http://localhost:8000
 ```
+
+`index.html` also works by double-clicking it. A `file://` page cannot `fetch`,
+so it reads `data/signal.js` — which is why `signal.py` writes the payload twice.
 
 `certifi` is optional but helps if your local Python has an empty CA store.
 
