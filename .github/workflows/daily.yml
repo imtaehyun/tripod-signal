@@ -1,0 +1,123 @@
+name: daily signal
+
+on:
+  schedule:
+    # 23:00 UTC, Mon-Fri = 18:00 EST / 19:00 EDT, same session day.
+    # Actions cron has no DST awareness, so a single UTC hour is chosen that
+    # lands after the US close in BOTH halves of the year. See ADR 0003.
+    - cron: "0 23 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: "Re-download full history from scratch"
+        type: boolean
+        default: false
+
+concurrency:
+  group: daily-signal
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # commit refreshed data
+  issues: write     # open a rebalance issue on a gear change
+  pages: write
+  id-token: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.signal.outputs.changed }}
+      summary: ${{ steps.signal.outputs.summary }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch prices
+        run: python scripts/fetch.py ${{ inputs.full && '--full' || '' }}
+
+      - name: Derive signal
+        id: signal
+        run: |
+          python scripts/signal.py --stats
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          d = json.load(open("data/signal.json"))
+          L, G = d["latest"], d["gears"]
+          print(f"changed={str(L['action_required']).lower()}")
+          prev = G[L["prev_gear"]]["label"] if L["prev_gear"] else "—"
+          summary = (
+              f"{L['date']} close -> {G[L['gear']]['label']} "
+              f"({G[L['gear']]['leverage']}x), was {prev}"
+          )
+          print(f"summary={summary}")
+          PY
+
+      - name: Commit data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "no data change, skipping commit"
+          else
+            git commit -m "data: signal through $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Open rebalance issue on gear change
+        if: steps.signal.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - > /tmp/body.md <<'PY'
+          import json
+          d = json.load(open("data/signal.json"))
+          L, G, P = d["latest"], d["gears"], d["params"]
+          g, prev = G[L["gear"]], G[L["prev_gear"]]
+          legs = L["legs"]
+          print(f"**{prev['label']} ({prev['leverage']}x) -> {g['label']} ({g['leverage']}x)**\n")
+          print(f"Judged on the **{L['date']}** close. Per the rule, execute on the **next session**.\n")
+          print("| leg | value | threshold |")
+          print("|---|---|---|")
+          print(f"| NDX vs {P['ma_length']}d MA | {legs['ma']['dist_pct']:+.2f}% "
+                f"| up >+{P['up_band']*100:.0f}% / down <-{P['down_band']*100:.0f}% |")
+          print(f"| VIX {P['vix_ma_length']}d avg | {legs['vix']['value']:.2f} "
+                f"| de-gear >= {P['vix_hot']} / cash >= {P['vix_panic']} |")
+          print(f"| 52w drawdown | {legs['dd']['value']:.2f}% "
+                f"| trigger {P['dd_trigger']*100:.0f}% |")
+          print(f"\nTarget weights: `{g['weights'] or 'CASH'}`")
+          print("\nClose this issue once the rebalance is actually placed. "
+                "An open issue means a trade you have not executed yet.")
+          print("\n<sub>Not investment advice. Auto-generated.</sub>")
+          PY
+          gh issue create \
+            --title "Rebalance: ${{ steps.signal.outputs.summary }}" \
+            --body-file /tmp/body.md \
+            --label rebalance
+          # Close superseded alerts so the open set always means "not yet done".
+          for n in $(gh issue list --label rebalance --state open \
+                       --json number --jq '.[].number' | tail -n +2); do
+            gh issue close "$n" --comment "Superseded by a newer signal."
+          done
+
+  deploy:
+    needs: refresh
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      - run: git pull --ff-only || true
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deploy
+        uses: actions/deploy-pages@v4
