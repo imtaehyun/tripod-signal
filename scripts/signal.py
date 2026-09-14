@@ -49,7 +49,12 @@ def align() -> tuple[list[str], list[float], list[float], int]:
     ndx = read_csv("ndx")
     vix = read_csv("vix")
     start = max(min(ndx), min(vix))
-    dates = sorted(d for d in ndx if d >= start)
+    # Never judge past the last settled VIX close. fetch.py already truncates,
+    # but a stale checkout or a hand-edited CSV must not be able to produce a
+    # signal from a forward-filled VIX on the most recent session — that is
+    # exactly the reading someone would act on.
+    end = min(max(ndx), max(vix))
+    dates = sorted(d for d in ndx if start <= d <= end)
 
     closes: list[float] = []
     vixes: list[float] = []

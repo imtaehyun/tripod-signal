@@ -198,10 +198,27 @@ def merge_into_csv(key: str, fresh: Rows, full: bool) -> int:
 def main() -> None:
     full = "--full" in sys.argv
     print(f"fetch: {'FULL rebuild' if full else 'incremental'}")
+
+    # VIX is fetched first and defines the cutoff. CBOE only publishes a row
+    # once the session has settled, whereas Yahoo hands back an in-progress bar
+    # for the current day whose "close" is just the last print. Storing that
+    # would be permanent: the CSVs are append-only, so a partial close would
+    # freeze and never be corrected, and the rule would be judged on a price
+    # that never existed. Truncating to the last settled VIX date avoids any
+    # clock or timezone arithmetic and fails in the safe direction.
+    vix = fetch("vix")
+    cutoff = vix[-1][0]
+    print(f"  cutoff: last settled session is {cutoff}")
+
+    ndx_all = fetch("ndx")
+    ndx = [(d, c) for d, c in ndx_all if d <= cutoff]
+    for day, close in ndx_all[len(ndx):]:
+        print(f"  ndx: DROPPED unsettled bar {day} ({close}) — no VIX close yet")
+
     total_new = 0
-    for key in SOURCES:
-        added = merge_into_csv(key, fetch(key), full)
-        print(f"  {key}: +{added} new dates")
+    for key, rows in (("ndx", ndx), ("vix", vix)):
+        added = merge_into_csv(key, rows, full)
+        print(f"  {key}: +{added} new dates (through {rows[-1][0]})")
         total_new += added
     print(f"fetch: {total_new} new dates total")
 
