@@ -144,6 +144,15 @@ const $ = (root, slot) => root.querySelector(`[data-slot="${slot}"]`);
 const fmt = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
 const pct = (v, digits = 2) => `${v > 0 ? '+' : ''}${v.toFixed(digits)}%`;
 
+/* Korean particle 로/으로: 로 after a vowel-final syllable or a ㄹ coda,
+   으로 otherwise. "1.5배로" but "현금으로". */
+const ro = word => {
+  const code = word.charCodeAt(word.length - 1) - 0xac00;
+  if (code < 0 || code > 11171) return '로';
+  const coda = code % 28;
+  return (coda === 0 || coda === 8) ? '로' : '으로';
+};
+
 const app = document.getElementById('app');
 
 function fail(message) {
@@ -263,17 +272,45 @@ function render(d) {
     `판정 ${L.date} 종가 · 갱신 ${d.generated_at.slice(0, 16).replace('T', ' ')}Z`;
   $(node, 'gearbar').style.background = gear.color;
 
+  /* Three states, not two: a gear key can change while the book does not. */
   const acted = L.action_required;
-  $(node, 'verdict-kicker').textContent = acted ? '리밸런싱 필요' : '오늘 할 일';
+  const regimeOnly = L.regime_only_change;
+  const o = L.orders;
+  const order = t => `<span class="tnum font-semibold text-slate-100">${t}</span>`;
+
+  $(node, 'verdict-kicker').textContent =
+    acted ? '리밸런싱 필요' : regimeOnly ? '상태만 변경' : '오늘 할 일';
   $(node, 'verdict-kicker').style.color = acted ? gear.color : '#64748b';
-  $(node, 'verdict').textContent = acted ? '기어를 변경한다' : '아무것도 하지 않는다';
-  $(node, 'verdict-sub').innerHTML = acted
-    ? `직전 <strong class="text-slate-300">${G[L.prev_gear].label}</strong> →
-       <strong style="color:${gear.color}">${gear.label}</strong>.
-       규칙상 <strong class="text-slate-300">다음 거래일</strong>에 체결한다.`
-    : `<strong class="text-slate-300">${L.days_since_change}일</strong>째
+  $(node, 'verdict').textContent =
+    acted ? '아래 주문을 낸다' : regimeOnly ? '주문 없음 (상태만 바뀜)' : '아무것도 하지 않는다';
+
+  if (acted) {
+    $(node, 'verdict-sub').innerHTML = `
+      <span class="mb-2 block">
+        <strong class="text-slate-300">${G[L.prev_gear].label}</strong> →
+        <strong style="color:${gear.color}">${gear.label}</strong> ·
+        규칙상 <strong class="text-slate-300">다음 거래일</strong>에 체결한다.
+      </span>
+      <span class="block space-y-1">
+        ${o.sell.length ? `<span class="block">1. ${o.sell.map(order).join(', ')} <strong class="text-amber-400">전량 매도</strong></span>` : ''}
+        ${o.buy.length ? `<span class="block">${o.sell.length ? '2. 대금으로' : '1. 보유 현금으로'}
+          ${o.buy.map(t => `${order(t)} ${(gear.weights[t] * 100).toFixed(0)}%`).join(' + ')}
+          <strong class="text-emerald-400">매수</strong></span>` : ''}
+        ${o.keep.length ? `<span class="block text-slate-500">${o.keep.map(order).join(', ')} 는 그대로 보유</span>` : ''}
+      </span>`;
+  } else if (regimeOnly) {
+    $(node, 'verdict-sub').innerHTML =
+      `레짐이 <strong class="text-slate-300">${G[L.prev_gear].ko}</strong> →
+       <strong style="color:${gear.color}">${gear.ko}</strong>${ro(gear.ko)} 바뀌었지만
+       보유 종목은 <strong class="text-slate-300">${gear.label}</strong>로 동일하다.
+       <strong class="text-slate-300">낼 주문이 없다.</strong>
+       35년 백테스트에서 ${S.regime_only_changes}회 발생한 경우다.`;
+  } else {
+    $(node, 'verdict-sub').innerHTML =
+      `<strong class="text-slate-300">${L.days_since_change}일</strong>째
        (${L.sessions_since_change} 거래일) 변경 없음.
        이 규칙은 연평균 ${S.changes_per_year}회만 움직이고, 최장 ${S.longest_no_change_days}일 손대지 않은 구간도 있었다.`;
+  }
 
   $(node, 'alloc').textContent = gear.label;
   $(node, 'alloc').style.color = gear.color;
@@ -330,17 +367,20 @@ function render(d) {
   /* events */
   $(node, 'events').innerHTML = d.events.filter(e => e.from).slice(-12).reverse().map(e => {
     const up = G[e.to].leverage > G[e.from].leverage;
-    const same = G[e.to].leverage === G[e.from].leverage;
-    const arrow = same ? '→ 유지' : up ? '↑ 증속' : '↓ 감속';
-    const tone = same ? 'text-slate-400' : up ? 'text-emerald-400' : 'text-amber-400';
-    return `<tr class="border-b border-slate-800/60 last:border-0">
+    const arrow = !e.trade ? '주문 없음' : up ? '↑ 증속' : '↓ 감속';
+    const tone = !e.trade ? 'text-slate-500' : up ? 'text-emerald-400' : 'text-amber-400';
+    const what = e.trade
+      ? [e.sell.length ? `${e.sell.join('+')} 매도` : '', e.buy.length ? `${e.buy.join('+')} 매수` : '']
+          .filter(Boolean).join(' → ')
+      : '보유 종목 동일';
+    return `<tr class="border-b border-slate-800/60 last:border-0 ${e.trade ? '' : 'opacity-60'}">
       <td class="tnum py-2 pr-3 text-slate-400">${e.date}</td>
       <td class="tnum py-2 pr-3 text-slate-300">${e.exec_date ?? '—'}</td>
       <td class="py-2 pr-3">
         <span style="color:${G[e.from].color}">${G[e.from].leverage}x</span>
         <span class="text-slate-600">→</span>
         <span class="font-semibold" style="color:${G[e.to].color}">${G[e.to].leverage}x</span>
-        <span class="ml-1 text-xs text-slate-500">${G[e.to].label}</span>
+        <span class="ml-1 text-xs text-slate-500">${what}</span>
       </td>
       <td class="py-2 pr-1 whitespace-nowrap text-xs ${tone}">${arrow}</td>
     </tr>`;
@@ -364,8 +404,13 @@ function render(d) {
         ${match ? '일치' : '불일치'}</td>
     </tr>`).join('') +
     `<tr><td colspan="4" class="pt-3 text-xs leading-relaxed text-slate-500">
-      감속 횟수만 불일치한다. 3배를 벗어난 구간은 총 ${S.gear_changes}회 전환 중 127개 에피소드로,
-      그중 4일 이상 지속된 것이 약 55개다. 원 영상이 짧은 되돌림을 어떻게 병합했는지 밝히지 않아 미해결로 둔다.
+      매매 횟수는 <strong class="text-slate-400">실제 주문이 발생한 ${S.trade_events}회</strong> 기준이다.
+      기어 키가 바뀐 것만 세면 ${S.gear_changes}회(연 8.07회)인데, 차이인 ${S.regime_only_changes}회는
+      1.5배(상승) ↔ 1.5배(하락) 전환으로 <strong class="text-slate-400">보유 종목이 같아 주문이 없다</strong>.
+      영상의 8.1회는 어느 쪽으로 세도 근사하므로 원 저자가 이 구분을 했는지는 알 수 없다.
+      <br><br>
+      감속 횟수만 불일치한다. 3배를 벗어난 구간은 127개 에피소드이고 그중 4일 이상 지속된 것이 약 55개다.
+      원 영상이 짧은 되돌림을 어떻게 병합했는지 밝히지 않아 미해결로 둔다.
       나머지 5개 지표가 모두 일치하므로 파라미터 추론 자체는 맞다고 본다.
     </td></tr>`;
 

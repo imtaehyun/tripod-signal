@@ -53,14 +53,23 @@ their stable keys, never by their leverage alone (two gears share 1.5x):
 
 **Downshift** / 감속 = moving to lower leverage. **Upshift** / 증속 = higher.
 A `G15_UP → G15_DOWN` move is **lateral**, not a downshift: same leverage,
-different regime.
+different regime — and critically, **zero orders**, because both hold an
+identical QQQ 50 / QLD 50 book. `orders_for()` is the single source of truth for
+this; never infer "a trade happened" from the gear key alone.
 
-## Gear change vs order / 기어 변경 vs 주문
+## Gear change vs trade vs order
 
-A **gear change** is one transition between two Gears — the unit the source
-video counts when it says "8.1 trades per year". An **order** is one buy or sell
-ticket; a single gear change usually needs two or three. Keep these separate;
-conflating them is how the reproduction check first went wrong.
+Three different counts, and conflating any two of them produces a wrong number
+or a wrong instruction:
+
+- **Gear change** — the gear key differs from yesterday's. 288 in 35 years.
+- **Trade** (`trade: true`) — the target *book* differs, so orders exist. 283.
+  The 5-event gap is the lateral `G15_UP ↔ G15_DOWN` case.
+- **Order** — one buy or sell ticket. 809; a trade needs one to three.
+
+`action_required` is **trade-based**, never gear-change-based. A regime-only
+change must not raise a rebalance alert, or it sends someone hunting for an
+order that does not exist.
 
 ## Judgement date vs execution date / 판정일 vs 체결일
 

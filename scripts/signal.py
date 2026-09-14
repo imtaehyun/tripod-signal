@@ -20,7 +20,7 @@ import os
 import sys
 from collections import Counter
 
-from params import GEARS, PARAMS, SERIES_TRADING_DAYS
+from params import GEARS, PARAMS, SERIES_TRADING_DAYS, orders_for
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -126,6 +126,7 @@ def build() -> dict:
                     "exec_date": dates[i + 1] if i + 1 < n else None,   # traded on the next session
                     "from": gear,
                     "to": new_gear,
+                    **orders_for(gear, new_gear),
                 })
             gear = new_gear
 
@@ -157,24 +158,22 @@ def summarize(built: dict) -> dict:
     span_years = (dt.date.fromisoformat(last["d"]) - dt.date.fromisoformat(first["d"])).days / 365.25
 
     real = [e for e in events if e["from"] is not None]
+    trades = [e for e in real if e["trade"]]
+    regime_only = [e for e in real if not e["trade"]]
     downshifts = [e for e in real
                   if GEARS[e["to"]]["leverage"] < GEARS[e["from"]]["leverage"]]
 
     # A gear change is not one order. Going TQQQ 100% -> QQQ 50%/QLD 50% is a
     # sell plus two buys. Counting orders is what makes our number comparable
     # to the source video's "8.1 trades per year".
-    orders = 0
-    for e in real:
-        before = set(GEARS[e["from"]]["weights"])
-        after = set(GEARS[e["to"]]["weights"])
-        orders += len(before - after) + len(after - before) + len(before & after)
+    orders = sum(len(e["sell"]) + len(e["buy"]) for e in real)
 
-    by_year: Counter[str] = Counter(e["date"][:4] for e in real)
+    by_year: Counter[str] = Counter(e["date"][:4] for e in trades)
     years = {r["d"][:4] for r in live}
     zero_trade_years = sorted(y for y in years if by_year[y] == 0)
 
     gaps = []
-    marks = [first["d"]] + [e["date"] for e in real]
+    marks = [first["d"]] + [e["date"] for e in trades]
     for a, b in zip(marks, marks[1:]):
         gaps.append((dt.date.fromisoformat(b) - dt.date.fromisoformat(a)).days)
     gaps.append((dt.date.fromisoformat(last["d"]) - dt.date.fromisoformat(marks[-1])).days)
@@ -188,10 +187,12 @@ def summarize(built: dict) -> dict:
         "span_years": round(span_years, 1),
         "sessions": len(live),
         "gear_changes": len(real),
+        "trade_events": len(trades),
+        "regime_only_changes": len(regime_only),
         "downshifts": len(downshifts),
         "orders_total": orders,
         "orders_per_year": round(orders / span_years, 1),
-        "changes_per_year": round(len(real) / span_years, 2),
+        "changes_per_year": round(len(trades) / span_years, 2),
         "zero_trade_years": zero_trade_years,
         "longest_no_change_days": max(gaps),
         "median_gap_days": sorted(gaps)[len(gaps) // 2],
@@ -205,7 +206,8 @@ def latest_block(built: dict) -> dict:
     live = [r for r in rows if r["g"] is not None]
     cur, prev = live[-1], live[-2]
     real = [e for e in built["events"] if e["from"] is not None]
-    last_change = real[-1] if real else None
+    trades = [e for e in real if e["trade"]]
+    last_change = trades[-1] if trades else None
 
     today = dt.date.fromisoformat(cur["d"])
     since_days = None
@@ -232,7 +234,12 @@ def latest_block(built: dict) -> dict:
         "color": gear["color"],
         "changed": cur["g"] != prev["g"],
         "prev_gear": prev["g"],
-        "action_required": cur["g"] != prev["g"],
+        # True only when the target book actually differs. A G15_UP <-> G15_DOWN
+        # move changes the gear key but holds the same QQQ/QLD book, so there is
+        # nothing to place.
+        "action_required": orders_for(prev["g"], cur["g"])["trade"],
+        "regime_only_change": cur["g"] != prev["g"] and not orders_for(prev["g"], cur["g"])["trade"],
+        "orders": orders_for(prev["g"], cur["g"]),
         "last_change": last_change,
         "days_since_change": since_days,
         "sessions_since_change": sessions_since,

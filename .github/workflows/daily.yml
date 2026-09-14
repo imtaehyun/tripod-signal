@@ -47,7 +47,11 @@ jobs:
           import json, os
           d = json.load(open("data/signal.json"))
           L, G = d["latest"], d["gears"]
+          # action_required is trade-based: a G15_UP <-> G15_DOWN move changes
+          # the gear key but not the book, so it must NOT raise a rebalance
+          # issue telling you to place an order that does not exist.
           print(f"changed={str(L['action_required']).lower()}")
+          print(f"regime_only={str(L['regime_only_change']).lower()}")
           prev = G[L["prev_gear"]]["label"] if L["prev_gear"] else "—"
           summary = (
               f"{L['date']} close -> {G[L['gear']]['label']} "
@@ -78,9 +82,21 @@ jobs:
           d = json.load(open("data/signal.json"))
           L, G, P = d["latest"], d["gears"], d["params"]
           g, prev = G[L["gear"]], G[L["prev_gear"]]
-          legs = L["legs"]
+          legs, o = L["legs"], L["orders"]
           print(f"**{prev['label']} ({prev['leverage']}x) -> {g['label']} ({g['leverage']}x)**\n")
           print(f"Judged on the **{L['date']}** close. Per the rule, execute on the **next session**.\n")
+          print("## Orders\n")
+          step = 1
+          if o["sell"]:
+              print(f"{step}. Sell **100% of {', '.join(o['sell'])}**")
+              step += 1
+          if o["buy"]:
+              tgt = " + ".join(f"{t} {g['weights'][t]*100:.0f}%" for t in o["buy"])
+              print(f"{step}. Buy **{tgt}** with the proceeds")
+              step += 1
+          if o["keep"]:
+              print(f"{step}. Keep **{', '.join(o['keep'])}** as is")
+          print()
           print("| leg | value | threshold |")
           print("|---|---|---|")
           print(f"| NDX vs {P['ma_length']}d MA | {legs['ma']['dist_pct']:+.2f}% "

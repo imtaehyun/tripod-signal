@@ -65,3 +65,38 @@ GEARS = {
 }
 
 SERIES_TRADING_DAYS = 756  # ~3 years rendered on the page
+
+
+def orders_for(from_gear: str | None, to_gear: str) -> dict:
+    """Concrete orders to move between two gears.
+
+    A gear change is not the same thing as a trade. G15_UP and G15_DOWN hold an
+    identical QQQ 50 / QLD 50 book and differ only in which regime produced
+    them, so moving between them requires ZERO orders. Telling someone to
+    rebalance in that case sends them looking for a trade that does not exist.
+
+    Returns sell/buy ticker lists and a `trade` flag that is False exactly when
+    the target book is unchanged.
+    """
+    before = GEARS[from_gear]["weights"] if from_gear else {}
+    after = GEARS[to_gear]["weights"]
+
+    # Preserve each gear's declared ticker order rather than sorting, so the
+    # rendered orders read in the same order as the gear label ("QQQ 50% + QLD
+    # 50%") instead of alphabetically ("QLD ... QQQ ...").
+    sell = [t for t in before if t not in after]
+    buy = [t for t in after if t not in before]
+    keep = [t for t in after if t in before]
+
+    # Every gear holds its tickers at a fixed weight, so a ticker present in
+    # both books never needs resizing. If that ever stops being true this
+    # assertion fires rather than silently under-reporting a partial trim.
+    for ticker in keep:
+        assert before[ticker] == after[ticker], f"{ticker} needs resizing, not handled"
+
+    return {
+        "sell": sell,
+        "buy": buy,
+        "keep": keep,
+        "trade": bool(sell or buy),
+    }

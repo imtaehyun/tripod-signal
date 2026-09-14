@@ -35,6 +35,11 @@ drawdown from the highest close of the trailing 252 sessions.
 
 If today's gear equals yesterday's, do nothing. That is the whole rule.
 
+Note that `G15_UP` and `G15_DOWN` hold the **same book** and differ only in the
+regime that produced them, so moving between them requires **no orders at all**
+(5 occurrences in 35 years). The dashboard reports that as "상태만 변경" rather
+than a rebalance, and no issue is opened.
+
 The asymmetric band (+1% / −5%) is hysteresis: *exit carefully, enter quickly.*
 It also means the regime **cannot be computed from a single day** — the history
 has to be replayed, which is what `scripts/signal.py` does.
@@ -48,7 +53,7 @@ them without any fitting:
 | Statistic | Source | This repo |
 |---|---|---|
 | Backtest span | 35 years | 35.7 years |
-| Gear changes per year | 8.1 | **8.07** |
+| Trades per year | 8.1 | **7.93** (8.07 counting gear keys) |
 | Median gap between changes | 6 days | **6 days** |
 | Years with zero changes | 5 | **5** (2001, 2002, 2013, 2014, 2017) |
 | Longest quiet stretch | 2 years 7 months | **1,001 days** |
