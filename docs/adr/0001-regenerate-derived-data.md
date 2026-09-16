@@ -48,3 +48,29 @@ close cannot rewrite history we already traded on.
   argument was never worth its correctness risk.
 - `signal.json` is rewritten wholesale each run, so its git diff is not
   human-readable. The raw CSVs, which are append-only, serve that purpose.
+
+## Amendment, 2026-09-15: derived data is not committed at all
+
+The consequence above turned out to have teeth. Because the daily workflow
+committed `signal.json`, and any local run regenerated it, every local change
+collided with the bot's commit in a file that cannot be merged by hand. This hit
+twice in two days, each time "resolved" by discarding both sides and rerunning
+`signal.py` — which is the correct resolution, and precisely the evidence that
+storing the file buys nothing.
+
+So `data/signal.json` and `data/signal.js` are now gitignored. Only the raw CSVs
+are committed. The derived payload is generated inside the workflow immediately
+before the Pages artifact is uploaded, and exists nowhere else.
+
+This forced the workflow into a **single job**: a separate deploy job checks out
+its own tree, which would no longer contain the derived file, and would also race
+the commit made by the refresh job.
+
+Consequences of the amendment:
+
+- The whole class of unmergeable conflicts is gone.
+- The policy in this ADR is now enforced by the repo layout rather than by
+  remembering to regenerate: there is no stored derived artifact to go stale.
+- Cost: a fresh clone cannot open `index.html` until `scripts/signal.py` has
+  been run once. The page detects the missing file and says so instead of
+  failing blankly.

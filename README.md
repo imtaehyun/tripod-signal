@@ -87,10 +87,10 @@ index.html              single-file dashboard, no build step
 scripts/params.py       every threshold the rule depends on
 scripts/fetch.py        NDX + VIX closes -> data/*.csv (append-only)
 scripts/signal.py       full replay -> data/signal.json (regenerated wholesale)
-data/ndx.csv            Nasdaq-100 closes, 1985-10-01 ->   (Yahoo Finance)
-data/vix.csv            VIX closes, 1990-01-02 ->          (CBOE, official)
-data/signal.json        canonical derived output
-data/signal.js          same payload as a <script> assignment, for file://
+data/ndx.csv            Nasdaq-100 closes, 1985-10-01 ->   (Yahoo Finance)  [committed]
+data/vix.csv            VIX closes, 1990-01-02 ->          (CBOE, official) [committed]
+data/signal.json        derived output                                       [gitignored]
+data/signal.js          same payload as a <script> assignment, for file://   [gitignored]
 CONTEXT.md              glossary — regime vs gear, dd52 vs MDD, etc.
 docs/adr/               why the three non-obvious decisions were made
 ```
@@ -109,6 +109,10 @@ python scripts/signal.py --stats   # rebuild data/signal.json, print validation
 python -m http.server 8000         # then open http://localhost:8000
 ```
 
+**A fresh clone has no `data/signal.json`** — the derived payload is gitignored
+and generated in CI right before deploy (ADR 0001). Run `scripts/signal.py`
+once and the page works; until then it tells you so.
+
 `index.html` also works by double-clicking it. A `file://` page cannot `fetch`,
 so it reads `data/signal.js` — which is why `signal.py` writes the payload twice.
 
@@ -123,8 +127,12 @@ so it reads `data/signal.js` — which is why `signal.py` writes the payload twi
 [`.github/workflows/daily.yml`](.github/workflows/daily.yml) runs at 23:00 UTC
 Mon–Fri (18:00 EST / 19:00 EDT — after the close, same evening, DST-proof; see
 [ADR 0003](docs/adr/0003-fixed-utc-cron.md)). It fetches, recomputes, commits
-only if the data changed, deploys Pages, and **on a gear change opens an issue
-labelled `rebalance`**, closing any older one.
+only the raw CSVs if new sessions arrived, deploys Pages, and **when a trade is
+required opens an issue labelled `rebalance`** with the concrete orders in it,
+closing any older one. A regime-only change opens nothing.
+
+It is a single job on purpose: the derived signal is never committed, so a
+separate deploy job would check out a tree without it.
 
 Since the rule fires roughly eight times a year and has gone as long as 1,001
 days untouched, the issue notification is the real interface. The page is where
