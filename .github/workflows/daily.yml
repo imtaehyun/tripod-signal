@@ -204,11 +204,19 @@ jobs:
             done
           done
 
+      # Deploy ONLY if this run actually derived a signal. data/signal.json is
+      # gitignored (ADR 0001), so it exists only in the workspace of a job that
+      # generated it -- deploying a run that skipped derivation (market holiday,
+      # or the wrong half of the DST cron pair) would upload a tree with no data
+      # and replace the live dashboard with its "signal.json not found" error.
       - uses: actions/configure-pages@v5
+        if: steps.signal.outcome == 'success'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.signal.outcome == 'success'
         with:
           path: .
       - id: deploy
+        if: steps.signal.outcome == 'success'
         uses: actions/deploy-pages@v4
 
       # A silent failure and a quiet day are indistinguishable to the person
