@@ -18,7 +18,8 @@ The rule, in full:
     target = raw snapped to a 5pp grid
     weight = target, but only if it has drifted >= 10pp from what is held
 
-`weight` is the fraction of the account in TQQQ. The remainder is cash.
+`weight` is the fraction of the account in TQQQ. The remainder is held in
+SGOV rather than as uninvested cash -- worth 1.99pp of CAGR, see params.py.
 
 Two of these steps are path-dependent — the latched legs and the deadband — so
 today's weight is not a function of today's prices alone. That is why this
@@ -30,7 +31,7 @@ from __future__ import annotations
 import datetime as dt
 from collections import Counter
 
-from params import SERIES_TRADING_DAYS, VOLTARGET as VT, band_for
+from params import CASH_TICKER, SERIES_TRADING_DAYS, VOLTARGET as VT, band_for
 
 ANNUALISATION = 252
 
@@ -241,12 +242,39 @@ def latest_block(built: dict) -> dict:
     }
 
 
-def payload(dates: list[str], closes: list[float]) -> dict:
+def payload(dates: list[str], closes: list[float],
+            provisional: tuple[str, float] | None = None) -> dict:
+    """Full payload. `provisional` appends one unsettled bar for today's decision.
+
+    The appended bar is a live 15:45 ET quote, not a close. It is safe to append
+    because `build` is a pure replay of committed history plus this one value --
+    nothing here is ever written back to data/*.csv, so ADR 0001 holds. Only the
+    LAST row can be affected, and it is tagged so the dashboard and the
+    notification can say which price the decision used.
+
+    History stays exact: yesterday and earlier are settled closes. Only today is
+    a proxy, which is precisely the situation measured in
+    tqqq-trend-lab/intraday_proxy.py, where it cost nothing.
+    """
+    if provisional is not None:
+        day, price = provisional
+        dates, closes = list(dates), list(closes)
+        if dates and dates[-1] == day:
+            closes[-1] = price      # provider already stubbed today; overwrite it
+        else:
+            dates.append(day)
+            closes.append(price)
+
     built = build(dates, closes)
     live = [r for r in built["rows"] if r["w"] is not None]
+    latest = latest_block(built)
+    latest["provisional"] = provisional is not None
+    if live:
+        live[-1] = dict(live[-1], provisional=provisional is not None)
     return {
         "params": VT,
-        "latest": latest_block(built),
+        "cash_ticker": CASH_TICKER,
+        "latest": latest,
         "stats": summarize(built),
         "events": built["events"],
         "series": live[-SERIES_TRADING_DAYS:],

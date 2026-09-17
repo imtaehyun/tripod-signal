@@ -29,6 +29,22 @@ PARAMS = {
     "execution": "next_open",   # judge after the close, trade the NEXT session
 }
 
+# The cash leg is held in SGOV, not as uninvested cash.
+#
+# This strategy sits in cash 51.5% of the time on average at target_vol 0.35, so
+# whether that cash earns interest is not a detail -- it is worth 1.99pp of CAGR
+# and 0.08 of MAR. Robinhood's High-Yield Cash is documented as applying to
+# "eligible BROKERAGE cash" with no stated coverage for retirement accounts, and
+# the account this runs in is a Roth IRA. Holding SGOV instead costs 0.14pp
+# (9bp expense ratio + ~2bp round-trip) and removes the question entirely, plus
+# the dependency on a $5/month subscription and a promotional rate that can move.
+#
+# Measured on ^NDX 1985-2026, lag=1, target_vol 0.35:
+#     cash earns T-bill  18.2% / -40.3% / MAR 0.45   <- what the backtest assumes
+#     cash earns 0%      16.2% / -43.5% / MAR 0.37   -1.99pp
+#     cash held in SGOV  18.1% / -40.4% / MAR 0.45   -0.14pp
+CASH_TICKER = "SGOV"
+
 # Gear definitions. Keys are stable identifiers used in signal.json and in the UI.
 GEARS = {
     "G3": {
@@ -110,7 +126,23 @@ VOLTARGET = {
     "vol_floor": 0.05,          # guard against divide-by-tiny; never binds in practice
 
     # --- the risk budget ---
-    "target_vol": 0.50,         # annualised volatility the levered book aims at
+    #
+    # 0.35, not 0.50. Under next-day-close fill the delay penalty scales with
+    # exposure (~8pp of MDD per unit of average leverage), so at lag=1 the lower
+    # budget wins on every axis that matters: MAR 0.32 vs 0.29, and walk-forward
+    # D2 (2000-2013) 9.9%/-36.9% vs 9.8%/-48.2%. At 15:45 fill (ADR 0005) MAR is
+    # flat across 20-65%, so 0.35 costs nothing there either -- it just runs a
+    # -40% drawdown instead of -51%.
+    #
+    # It is a RISK BUDGET, not an optimisation target. A block bootstrap (1-year
+    # blocks, 2000 draws, 41 years) puts the 90% CI on MAR differences at about
+    # +-0.07, which is wider than the gap between any two target_vol values
+    # here. Pick the drawdown you can actually sit through; do not tune this.
+    #
+    # Floor: 0.20 (avg leverage 0.84) returns 10.7% at lag=1 and LOSES to plain
+    # NDX buy-and-hold at 14.2%. Below ~0.30 the strategy stops being worth
+    # running at all.
+    "target_vol": 0.35,         # annualised volatility the levered book aims at
     "etf_leverage": 3.0,        # TQQQ
     "max_weight": 1.0,          # never more than 100% of the account in TQQQ
 

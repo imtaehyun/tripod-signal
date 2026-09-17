@@ -1,15 +1,33 @@
 name: daily signal
 
+# Two runs a day, doing deliberately different jobs. See ADR 0005.
+#
+#   intraday (15:45 ET)  the ACTIONABLE run. Decides on a live quote so the order
+#                        can go into the same close. Worth ~8pp of max drawdown
+#                        per unit of average leverage. Does NOT touch data/*.csv.
+#   settled  (after close) the RECORD run. Appends the real closes, re-derives
+#                        from settled data, opens the rebalance issue, deploys.
+#
+# Cron is scheduled ~20 minutes EARLY and scripts/quote.py sleeps to 15:45 ET,
+# because Actions cron fires late under load and a 5-minute window is not
+# something the scheduler can be trusted to hit. The DST pair exists because
+# Actions cron has no timezone: 15:25 ET is 19:25 UTC in summer and 20:25 UTC in
+# winter. Whichever one is wrong for the current half of the year lands outside
+# the session and the guard step skips it.
 on:
   schedule:
-    # 23:00 UTC, Mon-Fri = 18:00 EST / 19:00 EDT, same session day.
-    # Actions cron has no DST awareness, so a single UTC hour is chosen that
-    # lands after the US close in BOTH halves of the year. See ADR 0003.
-    - cron: "0 23 * * 1-5"
+    - cron: "25 19 * * 1-5"   # 15:25 EDT -> intraday
+    - cron: "25 20 * * 1-5"   # 15:25 EST -> intraday
+    - cron: "0 23 * * 1-5"    # after the close in both halves -> settled (ADR 0003)
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
+      mode:
+        description: "Which run to simulate"
+        type: choice
+        options: [settled, intraday]
+        default: settled
       full:
         description: "Re-download full history from scratch"
         type: boolean
@@ -20,20 +38,21 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write   # commit refreshed raw CSVs
-  issues: write     # open a rebalance issue on a gear change
+  contents: write
+  issues: write
   pages: write
   id-token: write
 
-# Deliberately ONE job. The derived signal is not committed (see ADR 0001), so
-# it exists only in this job's workspace -- a separate deploy job would check
-# out a tree without it, and would also race the commit made here.
 jobs:
-  refresh:
+  signal:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -41,28 +60,123 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Fetch prices
+      - name: Pick mode
+        id: mode
+        run: |
+          case "${{ github.event_name }}" in
+            schedule)
+              if [ "${{ github.event.schedule }}" = "0 23 * * 1-5" ]; then
+                echo "mode=settled"  >> "$GITHUB_OUTPUT"
+              else
+                echo "mode=intraday" >> "$GITHUB_OUTPUT"
+              fi ;;
+            workflow_dispatch) echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT" ;;
+            *)                 echo "mode=settled"           >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      # For the intraday run: sleep to 15:45 ET, then bail out if we are not
+      # actually in the session (the wrong half of the DST pair, or a holiday).
+      # `outcome=skip` short-circuits every later step but still lets the
+      # notifier explain why nothing was sent.
+      - name: Wait for the 15:45 ET window
+        id: window
+        if: steps.mode.outputs.mode == 'intraday'
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import sys; sys.path.insert(0, "scripts")
+          import quote
+          state = quote.wait_for_window()
+          p = quote.provisional()
+          print(f"state={state}")
+          print(f"go={'true' if p['usable'] else 'false'}")
+          print(f"reason={state}/fresh={p['fresh']}")
+          PY
+
+      - name: Skip note
+        if: steps.mode.outputs.mode == 'intraday' && steps.window.outputs.go != 'true'
+        run: |
+          echo "::notice::intraday run skipped (${{ steps.window.outputs.reason }})"
+          echo "Not in the session — wrong half of the DST cron pair, or a market holiday."
+
+      # ── settled run only ────────────────────────────────────────────────────
+      # NEVER run this in intraday mode. fetch.py is append-only and an existing
+      # date keeps its stored value, so writing today's in-progress bar at 15:45
+      # would freeze a partial price into ndx.csv permanently. The intraday run
+      # therefore reads committed history (settled through yesterday) and gets
+      # today from the live quote, which is exactly the model measured in
+      # tqqq-trend-lab/intraday_proxy.py.
+      - name: Fetch settled closes
+        if: steps.mode.outputs.mode == 'settled'
         run: python scripts/fetch.py ${{ inputs.full && '--full' || '' }}
 
       - name: Derive signal
         id: signal
+        if: steps.mode.outputs.mode == 'settled' || steps.window.outputs.go == 'true'
         run: |
-          python scripts/signal.py --stats
+          python scripts/signal.py ${{ steps.mode.outputs.mode == 'intraday' && '--provisional' || '--stats' }}
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           d = json.load(open("data/signal.json"))
-          # Each strategy alerts independently: they disagree often, and a day
-          # that is quiet for one is frequently the day the other moves.
           acted = [s["key"] for s in d["nav"]
                    if d["strategies"][s["key"]]["latest"]["action_required"]]
           print(f"acted={' '.join(acted)}")
           print(f"any_changed={str(bool(acted)).lower()}")
           PY
 
-      - name: Commit raw data
+      # ── the notification: one message per run, whatever happened ────────────
+      # The intraday run is the actionable one, so it always speaks. The settled
+      # run stays quiet unless it disagrees with what the intraday run said,
+      # because two identical messages a day trains you to ignore both.
+      - name: Notify (intraday)
+        if: steps.mode.outputs.mode == 'intraday' && steps.window.outputs.go == 'true'
+        run: python scripts/notify.py
+
+      - name: Notify (settled, only if it disagrees)
+        if: steps.mode.outputs.mode == 'settled'
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, sys
+          sys.path.insert(0, "scripts")
+          d = json.load(open("data/signal.json"))
+          vt = d["strategies"]["voltarget"]["latest"]
+          prev = None
+          if os.path.exists("data/last_intraday.json"):
+              prev = json.load(open("data/last_intraday.json"))
+          disagree = prev is not None and abs(prev.get("weight", -1) - vt["weight"]) > 1e-9
+          if disagree or vt["action_required"]:
+              import notify
+              acted, text = notify.build_ok()
+              extra = ""
+              if disagree:
+                  extra = (f"\n\n⚠️ <b>장중 판정과 다르다</b>: 15:45 기준 "
+                           f"{prev['weight']*100:.0f}% → 종가 기준 {vt['weight_pct']:.0f}%. "
+                           f"이미 체결했다면 그대로 두고 다음 판정을 기다려라.")
+              notify.send(text + extra)
+          else:
+              print("settled run agrees with the intraday call; staying quiet")
+          PY
+
+      - name: Remember the intraday call
+        if: steps.mode.outputs.mode == 'intraday' && steps.window.outputs.go == 'true'
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("data/signal.json"))
+          vt = d["strategies"]["voltarget"]["latest"]
+          json.dump({"date": vt["date"], "weight": vt["weight"]},
+                    open("data/last_intraday.json", "w"))
+          PY
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/last_intraday.json
+          git diff --cached --quiet || { git commit -m "intraday call $(date -u +%F)"; git push; }
+
+      - name: Commit settled closes
+        if: steps.mode.outputs.mode == 'settled'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash
           git add data/*.csv
           if git diff --cached --quiet; then
             echo "no new sessions, skipping commit"
@@ -72,88 +186,11 @@ jobs:
           fi
 
       - name: Open rebalance issues
-        if: steps.signal.outputs.any_changed == 'true'
+        if: steps.mode.outputs.mode == 'settled' && steps.signal.outputs.any_changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Body + title per strategy, written to /tmp/<key>.{md,title}.
-          python - <<'PY'
-          import json
-          d = json.load(open("data/signal.json"))
-          S = d["strategies"]
-
-          def tripod(out):
-              L, G, P = S["tripod"]["latest"], S["tripod"]["gears"], S["tripod"]["params"]
-              g, prev = G[L["gear"]], G[L["prev_gear"]]
-              legs, o = L["legs"], L["orders"]
-              t = (f"Rebalance [tripod]: {L['date']} close -> {g['label']} "
-                   f"({g['leverage']}x), was {prev['label']}")
-              p = out.append
-              p(f"**{prev['label']} ({prev['leverage']}x) -> {g['label']} ({g['leverage']}x)**\n")
-              p(f"Judged on the **{L['date']}** close. Per the rule, execute on the **next session**.\n")
-              p("## Orders\n")
-              step = 1
-              if o["sell"]:
-                  p(f"{step}. Sell **100% of {', '.join(o['sell'])}**"); step += 1
-              if o["buy"]:
-                  tgt = " + ".join(f"{x} {g['weights'][x]*100:.0f}%" for x in o["buy"])
-                  src = "the proceeds" if o["sell"] else "cash on hand"
-                  p(f"{step}. Buy **{tgt}** with {src}"); step += 1
-              if o["keep"]:
-                  p(f"{step}. Keep **{', '.join(o['keep'])}** as is")
-              p("\n## Why\n")
-              p("| leg | value | threshold |")
-              p("|---|---|---|")
-              p(f"| NDX vs {P['ma_length']}d MA | {legs['ma']['dist_pct']:+.2f}% "
-                f"| up >+{P['up_band']*100:.0f}% / down <-{P['down_band']*100:.0f}% |")
-              p(f"| VIX {P['vix_ma_length']}d avg | {legs['vix']['value']:.2f} "
-                f"| de-gear >= {P['vix_hot']} / cash >= {P['vix_panic']} |")
-              p(f"| 52w drawdown | {legs['dd']['value']:.2f}% "
-                f"| trigger {P['dd_trigger']*100:.0f}% |")
-              return t
-
-          def voltarget(out):
-              L, P, I = S["voltarget"]["latest"], S["voltarget"]["params"], S["voltarget"]["latest"]["inputs"]
-              was, now = L["prev_weight"] * 100, L["weight_pct"]
-              side = "Buy" if L["delta"] > 0 else "Sell"
-              t = (f"Rebalance [voltarget]: {L['date']} close -> TQQQ {now:.0f}%, was {was:.0f}%")
-              p = out.append
-              p(f"**TQQQ {was:.0f}% -> {now:.0f}%**  (cash {L['cash_pct']:.0f}%, "
-                f"account leverage {L['leverage']:.2f}x)\n")
-              p(f"Judged on the **{L['date']}** close. Per the rule, execute on the **next session**.\n")
-              p("## Order\n")
-              p(f"1. **{side} {abs(L['delta_pp']):.0f}pp of the account in TQQQ** "
-                f"-> end at TQQQ {now:.0f}% / cash {L['cash_pct']:.0f}%")
-              p("\n## Why\n")
-              p("| input | value |")
-              p("|---|---|")
-              p(f"| trend vote (latched legs) | {I['above']}/{I['of']} = {I['vote']:.2f} |")
-              p(f"| realised vol ({'/'.join(str(w) for w in P['vol_windows'])}d avg) | {I['rvol_pct']:.1f}% |")
-              p(f"| target vol / (3 x rvol) | {P['target_vol']*100:.0f}% / "
-                f"(3 x {I['rvol_pct']:.1f}%) |")
-              p(f"| raw target | {I['raw_pct']:.1f}% |")
-              p(f"| after {I['step_pp']:.0f}pp grid + {I['band_pp']:.0f}pp deadband | **{now:.0f}%** |")
-              legs = ", ".join(
-                  f"{n}d {'on' if I['legs'][str(n)] else 'off'} ({I['ma_dist_pct'][str(n)]:+.1f}%)"
-                  for n in P["ma_lengths"])
-              p(f"\nLegs: {legs}. A leg latches on above MA*(1+{P['ma_band']}) and off below "
-                f"MA*(1-{P['ma_band']}), carrying its state in between.")
-              return t
-
-          for key, fn in (("tripod", tripod), ("voltarget", voltarget)):
-              if not S[key]["latest"]["action_required"]:
-                  continue
-              body: list[str] = []
-              title = fn(body)
-              body.append("\nClose this issue once the rebalance is actually placed. "
-                          "An open issue means a trade you have not executed yet.")
-              body.append("\n<sub>Not investment advice. Auto-generated.</sub>")
-              open(f"/tmp/{key}.md", "w").write("\n".join(body))
-              open(f"/tmp/{key}.title", "w").write(title)
-          PY
-
-          # Labels are per strategy so that superseding one never closes the
-          # other's outstanding alert.
+          python scripts/issue_body.py
           gh label create rebalance --color d73a4a --description "Signal wants a trade" --force
           for key in ${{ steps.signal.outputs.acted }}; do
             gh label create "strategy:$key" --color 0e8a16 --force
@@ -161,7 +198,6 @@ jobs:
               --title "$(cat /tmp/$key.title)" \
               --body-file "/tmp/$key.md" \
               --label rebalance --label "strategy:$key"
-            # Close superseded alerts so the open set always means "not yet done".
             for n in $(gh issue list --label rebalance --label "strategy:$key" \
                          --state open --json number --jq '.[].number' | tail -n +2); do
               gh issue close "$n" --comment "Superseded by a newer $key signal."
@@ -174,3 +210,11 @@ jobs:
           path: .
       - id: deploy
         uses: actions/deploy-pages@v4
+
+      # A silent failure and a quiet day are indistinguishable to the person
+      # holding the position, so failure has to be as loud as a trade.
+      - name: Notify failure
+        if: failure()
+        env:
+          FAILED_STEP: ${{ steps.mode.outputs.mode }} run
+        run: python scripts/notify.py --fail || echo "::error::could not send the failure message"

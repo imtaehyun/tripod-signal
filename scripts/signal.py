@@ -44,7 +44,7 @@ def read_csv(name: str) -> dict[str, float]:
     return out
 
 
-def align() -> tuple[list[str], list[float], list[float], int]:
+def align(provisional: tuple[str, float, float | None] | None = None) -> tuple[list[str], list[float], list[float], int]:
     """Align VIX onto the NDX trading calendar.
 
     NDX defines the sessions because NDX is what we actually trade. A missing
@@ -76,6 +76,16 @@ def align() -> tuple[list[str], list[float], list[float], int]:
         vixes.append(last_vix)
 
     dates = dates[len(dates) - len(closes):]
+
+    if provisional is not None:
+        day, ndx_now, vix_now = provisional
+        if dates and dates[-1] == day:
+            closes[-1], vixes[-1] = ndx_now, (vix_now or vixes[-1])
+        else:
+            dates = list(dates) + [day]
+            closes.append(ndx_now)
+            vixes.append(vix_now if vix_now is not None else vixes[-1])
+
     return dates, closes, vixes, filled
 
 
@@ -101,8 +111,13 @@ def pick_gear(regime: str, vix10: float, dd: float) -> str:
     return "G15_DOWN" if vix10 < PARAMS["vix_panic"] else "CASH"
 
 
-def build() -> dict:
-    dates, closes, vixes, filled = align()
+def build(provisional: tuple[str, float, float | None] | None = None) -> dict:
+    """Replay the Tripod rule. `provisional` appends one unsettled 15:45 ET bar.
+
+    Same contract as voltarget.payload: the bar never reaches data/*.csv, only
+    the last row can be affected, and it is tagged. See ADR 0005.
+    """
+    dates, closes, vixes, filled = align(provisional)
     n = len(dates)
     ma_n, vix_n, dd_n = PARAMS["ma_length"], PARAMS["vix_ma_length"], PARAMS["dd_lookback"]
 
@@ -288,9 +303,31 @@ def ndx_series() -> tuple[list[str], list[float]]:
 
 
 def main() -> None:
-    built = build()
+    # --provisional decides on a live 15:45 ET quote instead of the settled close.
+    # Worth ~8pp of max drawdown per unit of average leverage; see ADR 0005. If
+    # the quote is unusable (weekend, or the run landed after the session) the
+    # run silently degrades to the settled close rather than failing -- a stale
+    # signal is worse than a late one, but no signal is worst of all.
+    prov_meta = None
+    prov_vt = prov_tp = None
+    if "--provisional" in sys.argv:
+        import quote
+        prov_meta = quote.provisional()
+        if prov_meta["usable"]:
+            q = prov_meta["quotes"]["^NDX"]
+            prov_vt = (q["session"], q["price"])
+            v = prov_meta["quotes"].get("^VIX")
+            prov_tp = (q["session"], q["price"], v["price"] if v else None)
+            print(f"provisional: {q['session']} NDX {q['price']} "
+                  f"@ {q['as_of_et']} (state={prov_meta['state']})")
+        else:
+            print(f"provisional: unusable (state={prov_meta['state']}, "
+                  f"errors={prov_meta['errors']}) -> settled close")
+
+    built = build(prov_tp)
     stats = summarize(built)
     latest = latest_block(built)
+    latest["provisional"] = prov_tp is not None
 
     series = [r for r in built["rows"] if r["g"] is not None][-SERIES_TRADING_DAYS:]
     tripod = {
@@ -303,11 +340,12 @@ def main() -> None:
     }
 
     vt_dates, vt_closes = ndx_series()
-    vt = voltarget.payload(vt_dates, vt_closes)
+    vt = voltarget.payload(vt_dates, vt_closes, prov_vt)
 
     out = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "nav": STRATEGIES,
+        "provisional": prov_meta,
         "data_range": {
             "ndx_first": vt_dates[0],
             "last_session": vt_dates[-1],

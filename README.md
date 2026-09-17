@@ -109,8 +109,22 @@ else.
    weight = target, adopted only once it sits ≥ 10pp from what is held
    ```
 
-`weight` is the fraction of the account in TQQQ. The rest is cash — and earns
-interest, which matters more than people expect.
+`weight` is the fraction of the account in TQQQ. The rest is held in **SGOV**.
+
+**Why SGOV rather than cash.** At `target_vol` 0.35 this strategy sits out of the
+market 51.5% of the time on average, so whether the idle half earns interest is
+not a detail — it is worth **1.99pp of CAGR and 0.08 of MAR**. This runs in a Roth
+IRA, and Robinhood's High-Yield Cash is documented as applying to "eligible
+*brokerage* cash" with no stated coverage for retirement accounts. Holding SGOV
+costs 0.14pp (9bp expense ratio + ~2bp round trip) and removes the question:
+
+| cash leg | CAGR | MDD | MAR |
+|---|---|---|---|
+| earns the full T-bill rate *(what the backtest assumes)* | 18.2% | −40.3% | 0.45 |
+| earns 0% | 16.2% | −43.5% | 0.37 |
+| **held in SGOV** | **18.1%** | **−40.4%** | **0.45** |
+
+It is the dominant choice under uncertainty: it risks 0.14pp to protect 1.99pp.
 
 **Why divide by volatility.** A 3x ETF's rebalancing decay is
 `-(L²-L)/2 × σ²`, which at L=3 is `-3σ²`. Measured on NDX since 1985, the top
@@ -120,7 +134,12 @@ sizing inversely to σ pins the term to a constant. It also drops average levera
 from 2.3x to 1.9x, so the borrowing cost falls too.
 
 **`target_vol` is a risk budget, not an optimum** — the same character of value as
-Tripod's VIX 28, and the only knob here meant to be turned.
+Tripod's VIX 28, and the only knob here meant to be turned. Deployed at **0.35**.
+A block bootstrap (1-year blocks, 2000 draws, 41 years) puts the 90% CI on MAR
+differences at roughly **±0.07**, which is wider than the gap between any two
+`target_vol` values worth considering — so pick the drawdown you can sit through
+and stop. The floor is real though: 0.20 (avg leverage 0.84) returns 10.7% and
+*loses* to plain NDX buy-and-hold at 14.2%.
 
 **Why the legs latch.** Without it the rule is unrunnable: four legs and a
 multiplier near 1.0 mean one MA crossing moves the target ~25pp, straight through
@@ -204,13 +223,40 @@ so it reads `data/signal.js` — which is why `signal.py` writes the payload twi
 
 ## Automation
 
-[`.github/workflows/daily.yml`](.github/workflows/daily.yml) runs at 23:00 UTC
-Mon–Fri (18:00 EST / 19:00 EDT — after the close, same evening, DST-proof; see
-[ADR 0003](docs/adr/0003-fixed-utc-cron.md)). It fetches, recomputes, commits
-only the raw CSVs if new sessions arrived, deploys Pages, and **when a trade is
-required opens an issue labelled `rebalance` plus `strategy:<key>`** with the
-concrete orders in it, closing any older one *for that strategy only*. The two
-strategies alert independently; a regime-only Tripod change opens nothing.
+[`.github/workflows/daily.yml`](.github/workflows/daily.yml) runs **twice a day,
+doing different jobs** ([ADR 0005](docs/adr/0005-intraday-decision.md)):
+
+| run | when | what it does |
+|---|---|---|
+| **intraday** | 15:45 ET | the *actionable* one. Decides on a live quote so the order goes into the **same close**. Sends Telegram. Never touches `data/*.csv`. |
+| **settled** | after the close | the *record*. Appends real closes, re-derives from settled data, opens the rebalance issue, deploys Pages. |
+
+Deciding at 15:45 instead of the next close is worth about **8pp of max drawdown
+per unit of average leverage** and 0.13 of MAR — more than every signal
+refinement ever tried here, combined. Using a 15:45 price for the *signal* costs
+nothing, because the ±1% latch bands absorb the 0.44% residual move; see ADR 0005
+for the measurement.
+
+Cron fires ~20 minutes early and `scripts/quote.py` sleeps to 15:45, because
+Actions cron runs late under load. Two crons exist for DST (there is no single UTC
+hour that is 15:45 ET year-round, unlike [ADR 0003](docs/adr/0003-fixed-utc-cron.md));
+the wrong one lands outside the session and is skipped.
+
+**Notification: every run sends exactly one message, including quiet days.** That
+is the whole point — *a silent failure and a quiet day are indistinguishable*, so
+a broken fetch or a cancelled cron would otherwise present as "nothing to do"
+while the position drifts and the dashboard shows a stale number. Three outcomes:
+`trade` (loud, with the orders), `quiet` (one line, plus what would release the
+deadband), `failed` (loud, with the step and the log link). The settled run stays
+quiet unless it *disagrees* with the intraday call, because two identical messages
+a day trains you to ignore both.
+
+The GitHub issue remains the durable log: **when a trade is required it opens one
+labelled `rebalance` plus `strategy:<key>`** with the concrete orders, closing any
+older one *for that strategy only*. The two strategies alert independently; a
+regime-only Tripod change opens nothing.
+
+Secrets required: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 
 It is a single job on purpose: the derived signal is never committed, so a
 separate deploy job would check out a tree without it.
