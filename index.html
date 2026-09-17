@@ -753,9 +753,15 @@ function renderVolTarget(st, tripodStats, root) {
       <span class="tnum">${S.longest_no_change_days}일</span> vs
       <span class="tnum">${tripodStats.longest_no_change_days}일</span>이다.
       “매일 볼 이유가 없다”는 트라이팟의 장점이 여기서는 성립하지 않는다.</p>
-    <p><strong class="text-amber-200/80">과세계좌에서는 불리하다.</strong>
-      회전이 5배 가까이 높아 세금이 성과 우위를 상당 부분 먹는다.
-      세금 없는 계좌가 아니면 목표 변동성을 올려 회전을 낮추는 편이 낫다.</p>
+    <p><strong class="text-amber-200/80">과세계좌에서는 단순보유에 진다.</strong>
+      로트 단위로 세금을 계산해 보면 드래그가 <span class="tnum">3.6~4.6pp</span>다.
+      목표 변동성 35%는 세전 16.8%가 세후 <span class="tnum">13.2%</span>가 되어
+      레버리지 없는 나스닥 단순보유(<span class="tnum">14.2%</span>)보다 낮다.
+      <strong class="text-slate-300">회전을 줄여도 해결되지 않는다</strong> — 데드밴드를
+      넓혀 회전을 4.5배 줄여도 드래그는 3.64→3.09pp뿐이고(세금은 거래 <em>횟수</em>가
+      아니라 실현이익 <em>금액</em>에 비례한다) 추적이 나빠져 MDD가 −54.6%→−75.6%로
+      무너진다. 답은 파라미터가 아니라 계좌다: <strong class="text-slate-300">IRA·401k에서
+      돌리면 16.7%</strong>(+3.54pp)로, 측정한 모든 레버 중 가장 크다.</p>
     <p><strong class="text-amber-200/80">변동성은 뒤를 본다.</strong>
       ${P.vol_windows.join('·')}일 창이라 급락 <em>이후에</em> 비중을 줄인다.
       1987년·2020년 같은 갭 하락의 첫 방은 그대로 맞는다.</p>
