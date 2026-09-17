@@ -30,6 +30,13 @@ import sys
 import urllib.parse
 import urllib.request
 
+# Reuse fetch.py's CA bundle resolution. Plain Python on macOS, and any machine
+# behind a TLS-inspecting corporate proxy, has a trust store that rejects
+# api.telegram.org with CERTIFICATE_VERIFY_FAILED. Actions does not need this;
+# testing the notifier locally does, and a notifier you cannot test locally is
+# one you find out about at 15:45.
+from fetch import CTX
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(os.path.dirname(HERE), "data")
 PAGE = os.environ.get("DASHBOARD_URL", "https://imtaehyun.github.io/tripod-signal/")
@@ -50,7 +57,7 @@ def send(text: str) -> None:
         f"https://api.telegram.org/bot{token}/sendMessage", data=body,
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    with urllib.request.urlopen(req, timeout=30, context=CTX) as resp:
         payload = json.loads(resp.read())
     if not payload.get("ok"):
         raise SystemExit(f"FATAL: telegram rejected the message: {payload}")
@@ -72,7 +79,7 @@ def _fill_line(prov: dict | None) -> str:
 
 def voltarget_msg(s: dict, prov: dict | None) -> tuple[bool, str]:
     L, P, I = s["latest"], s["params"], s["latest"]["inputs"]
-    cash = os.environ.get("CASH_TICKER", "SGOV")
+    cash = s.get("cash_ticker", "SGOV")   # from params.CASH_TICKER via signal.json
     now, was = L["weight_pct"], L["prev_weight"] * 100
     legs = " ".join(
         f"{n}d{'✅' if I['legs'][str(n)] else '⬜️'}" for n in P["ma_lengths"])
