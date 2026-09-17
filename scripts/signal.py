@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Replay the full history and derive data/signal.json.
+"""Replay the full history and derive data/signal.json for every strategy.
 
 This regenerates the ENTIRE derived history on every run — it never appends.
 Change a threshold in params.py and the whole timeline reflows under the new
 logic, so the chart can never show a past painted by a rule we no longer use.
 See docs/adr/0001-regenerate-derived-data.md.
+
+Two strategies are emitted side by side under `strategies` (ADR 0004). They
+answer the same question and deliberately do not share a window: Tripod needs
+VIX and so starts in 1990, Vol Target needs only NDX and starts in 1986.
 
 Usage:
     python scripts/signal.py           # write data/signal.json
@@ -20,7 +24,8 @@ import os
 import sys
 from collections import Counter
 
-from params import GEARS, PARAMS, SERIES_TRADING_DAYS, orders_for
+import voltarget
+from params import GEARS, PARAMS, SERIES_TRADING_DAYS, STRATEGIES, orders_for
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -270,24 +275,45 @@ def latest_block(built: dict) -> dict:
     }
 
 
+def ndx_series() -> tuple[list[str], list[float]]:
+    """The full NDX calendar, unbounded by VIX.
+
+    Tripod has to stop at the last settled VIX close; Vol Target does not read
+    VIX at all, so truncating it to the VIX window would throw away four years
+    of history for no reason.
+    """
+    ndx = read_csv("ndx")
+    dates = sorted(ndx)
+    return dates, [ndx[d] for d in dates]
+
+
 def main() -> None:
     built = build()
     stats = summarize(built)
     latest = latest_block(built)
 
     series = [r for r in built["rows"] if r["g"] is not None][-SERIES_TRADING_DAYS:]
-    out = {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+    tripod = {
         "params": PARAMS,
         "gears": GEARS,
-        "data_range": {
-            "ndx_first": built["dates"][0],
-            "last_session": built["dates"][-1],
-        },
         "latest": latest,
         "stats": stats,
         "events": built["events"],
         "series": series,
+    }
+
+    vt_dates, vt_closes = ndx_series()
+    vt = voltarget.payload(vt_dates, vt_closes)
+
+    out = {
+        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "nav": STRATEGIES,
+        "data_range": {
+            "ndx_first": vt_dates[0],
+            "last_session": vt_dates[-1],
+            "tripod_last_session": built["dates"][-1],
+        },
+        "strategies": {"tripod": tripod, "voltarget": vt},
     }
 
     path = os.path.join(DATA, "signal.json")
@@ -305,12 +331,18 @@ def main() -> None:
         json.dump(out, fh, ensure_ascii=False, separators=(",", ":"))
         fh.write(";\n")
     print(f"signal.js  written: {os.path.getsize(js_path) / 1024:.0f} KB")
-    print(f"  latest {latest['date']}  ->  {latest['gear']} ({latest['label']})"
+    print(f"  tripod    {latest['date']}  ->  {latest['gear']} ({latest['label']})"
           f"  action_required={latest['action_required']}")
+    vl = vt["latest"]
+    print(f"  voltarget {vl['date']}  ->  TQQQ {vl['weight_pct']}% / cash {vl['cash_pct']}%"
+          f"  action_required={vl['action_required']}")
 
     if "--stats" in sys.argv:
-        print("\n--- validation stats (compare against the source video) ---")
+        print("\n--- tripod: validation stats (compare against the source video) ---")
         for key, value in stats.items():
+            print(f"  {key}: {value}")
+        print("\n--- voltarget: operating stats (no performance figures by design) ---")
+        for key, value in vt["stats"].items():
             print(f"  {key}: {value}")
 
 

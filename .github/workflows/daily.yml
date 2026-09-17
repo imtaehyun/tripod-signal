@@ -51,15 +51,12 @@ jobs:
           python - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           d = json.load(open("data/signal.json"))
-          L, G = d["latest"], d["gears"]
-          # action_required is trade-based: a G15_UP <-> G15_DOWN move changes
-          # the gear key but not the book, so it must NOT raise a rebalance
-          # issue telling you to place an order that does not exist.
-          print(f"changed={str(L['action_required']).lower()}")
-          print(f"regime_only={str(L['regime_only_change']).lower()}")
-          prev = G[L["prev_gear"]]["label"] if L["prev_gear"] else "—"
-          print(f"summary={L['date']} close -> {G[L['gear']]['label']} "
-                f"({G[L['gear']]['leverage']}x), was {prev}")
+          # Each strategy alerts independently: they disagree often, and a day
+          # that is quiet for one is frequently the day the other moves.
+          acted = [s["key"] for s in d["nav"]
+                   if d["strategies"][s["key"]]["latest"]["action_required"]]
+          print(f"acted={' '.join(acted)}")
+          print(f"any_changed={str(bool(acted)).lower()}")
           PY
 
       - name: Commit raw data
@@ -74,52 +71,101 @@ jobs:
             git push
           fi
 
-      - name: Open rebalance issue on gear change
-        if: steps.signal.outputs.changed == 'true'
+      - name: Open rebalance issues
+        if: steps.signal.outputs.any_changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python - > /tmp/body.md <<'PY'
+          # Body + title per strategy, written to /tmp/<key>.{md,title}.
+          python - <<'PY'
           import json
           d = json.load(open("data/signal.json"))
-          L, G, P = d["latest"], d["gears"], d["params"]
-          g, prev = G[L["gear"]], G[L["prev_gear"]]
-          legs, o = L["legs"], L["orders"]
-          print(f"**{prev['label']} ({prev['leverage']}x) -> {g['label']} ({g['leverage']}x)**\n")
-          print(f"Judged on the **{L['date']}** close. Per the rule, execute on the **next session**.\n")
-          print("## Orders\n")
-          step = 1
-          if o["sell"]:
-              print(f"{step}. Sell **100% of {', '.join(o['sell'])}**")
-              step += 1
-          if o["buy"]:
-              tgt = " + ".join(f"{t} {g['weights'][t]*100:.0f}%" for t in o["buy"])
-              src = "the proceeds" if o["sell"] else "cash on hand"
-              print(f"{step}. Buy **{tgt}** with {src}")
-              step += 1
-          if o["keep"]:
-              print(f"{step}. Keep **{', '.join(o['keep'])}** as is")
-          print("\n## Why\n")
-          print("| leg | value | threshold |")
-          print("|---|---|---|")
-          print(f"| NDX vs {P['ma_length']}d MA | {legs['ma']['dist_pct']:+.2f}% "
+          S = d["strategies"]
+
+          def tripod(out):
+              L, G, P = S["tripod"]["latest"], S["tripod"]["gears"], S["tripod"]["params"]
+              g, prev = G[L["gear"]], G[L["prev_gear"]]
+              legs, o = L["legs"], L["orders"]
+              t = (f"Rebalance [tripod]: {L['date']} close -> {g['label']} "
+                   f"({g['leverage']}x), was {prev['label']}")
+              p = out.append
+              p(f"**{prev['label']} ({prev['leverage']}x) -> {g['label']} ({g['leverage']}x)**\n")
+              p(f"Judged on the **{L['date']}** close. Per the rule, execute on the **next session**.\n")
+              p("## Orders\n")
+              step = 1
+              if o["sell"]:
+                  p(f"{step}. Sell **100% of {', '.join(o['sell'])}**"); step += 1
+              if o["buy"]:
+                  tgt = " + ".join(f"{x} {g['weights'][x]*100:.0f}%" for x in o["buy"])
+                  src = "the proceeds" if o["sell"] else "cash on hand"
+                  p(f"{step}. Buy **{tgt}** with {src}"); step += 1
+              if o["keep"]:
+                  p(f"{step}. Keep **{', '.join(o['keep'])}** as is")
+              p("\n## Why\n")
+              p("| leg | value | threshold |")
+              p("|---|---|---|")
+              p(f"| NDX vs {P['ma_length']}d MA | {legs['ma']['dist_pct']:+.2f}% "
                 f"| up >+{P['up_band']*100:.0f}% / down <-{P['down_band']*100:.0f}% |")
-          print(f"| VIX {P['vix_ma_length']}d avg | {legs['vix']['value']:.2f} "
+              p(f"| VIX {P['vix_ma_length']}d avg | {legs['vix']['value']:.2f} "
                 f"| de-gear >= {P['vix_hot']} / cash >= {P['vix_panic']} |")
-          print(f"| 52w drawdown | {legs['dd']['value']:.2f}% "
+              p(f"| 52w drawdown | {legs['dd']['value']:.2f}% "
                 f"| trigger {P['dd_trigger']*100:.0f}% |")
-          print("\nClose this issue once the rebalance is actually placed. "
-                "An open issue means a trade you have not executed yet.")
-          print("\n<sub>Not investment advice. Auto-generated.</sub>")
+              return t
+
+          def voltarget(out):
+              L, P, I = S["voltarget"]["latest"], S["voltarget"]["params"], S["voltarget"]["latest"]["inputs"]
+              was, now = L["prev_weight"] * 100, L["weight_pct"]
+              side = "Buy" if L["delta"] > 0 else "Sell"
+              t = (f"Rebalance [voltarget]: {L['date']} close -> TQQQ {now:.0f}%, was {was:.0f}%")
+              p = out.append
+              p(f"**TQQQ {was:.0f}% -> {now:.0f}%**  (cash {L['cash_pct']:.0f}%, "
+                f"account leverage {L['leverage']:.2f}x)\n")
+              p(f"Judged on the **{L['date']}** close. Per the rule, execute on the **next session**.\n")
+              p("## Order\n")
+              p(f"1. **{side} {abs(L['delta_pp']):.0f}pp of the account in TQQQ** "
+                f"-> end at TQQQ {now:.0f}% / cash {L['cash_pct']:.0f}%")
+              p("\n## Why\n")
+              p("| input | value |")
+              p("|---|---|")
+              p(f"| trend vote (latched legs) | {I['above']}/{I['of']} = {I['vote']:.2f} |")
+              p(f"| realised vol ({'/'.join(str(w) for w in P['vol_windows'])}d avg) | {I['rvol_pct']:.1f}% |")
+              p(f"| target vol / (3 x rvol) | {P['target_vol']*100:.0f}% / "
+                f"(3 x {I['rvol_pct']:.1f}%) |")
+              p(f"| raw target | {I['raw_pct']:.1f}% |")
+              p(f"| after {I['step_pp']:.0f}pp grid + {I['band_pp']:.0f}pp deadband | **{now:.0f}%** |")
+              legs = ", ".join(
+                  f"{n}d {'on' if I['legs'][str(n)] else 'off'} ({I['ma_dist_pct'][str(n)]:+.1f}%)"
+                  for n in P["ma_lengths"])
+              p(f"\nLegs: {legs}. A leg latches on above MA*(1+{P['ma_band']}) and off below "
+                f"MA*(1-{P['ma_band']}), carrying its state in between.")
+              return t
+
+          for key, fn in (("tripod", tripod), ("voltarget", voltarget)):
+              if not S[key]["latest"]["action_required"]:
+                  continue
+              body: list[str] = []
+              title = fn(body)
+              body.append("\nClose this issue once the rebalance is actually placed. "
+                          "An open issue means a trade you have not executed yet.")
+              body.append("\n<sub>Not investment advice. Auto-generated.</sub>")
+              open(f"/tmp/{key}.md", "w").write("\n".join(body))
+              open(f"/tmp/{key}.title", "w").write(title)
           PY
-          gh issue create \
-            --title "Rebalance: ${{ steps.signal.outputs.summary }}" \
-            --body-file /tmp/body.md \
-            --label rebalance
-          # Close superseded alerts so the open set always means "not yet done".
-          for n in $(gh issue list --label rebalance --state open \
-                       --json number --jq '.[].number' | tail -n +2); do
-            gh issue close "$n" --comment "Superseded by a newer signal."
+
+          # Labels are per strategy so that superseding one never closes the
+          # other's outstanding alert.
+          gh label create rebalance --color d73a4a --description "Signal wants a trade" --force
+          for key in ${{ steps.signal.outputs.acted }}; do
+            gh label create "strategy:$key" --color 0e8a16 --force
+            gh issue create \
+              --title "$(cat /tmp/$key.title)" \
+              --body-file "/tmp/$key.md" \
+              --label rebalance --label "strategy:$key"
+            # Close superseded alerts so the open set always means "not yet done".
+            for n in $(gh issue list --label rebalance --label "strategy:$key" \
+                         --state open --json number --jq '.[].number' | tail -n +2); do
+              gh issue close "$n" --comment "Superseded by a newer $key signal."
+            done
           done
 
       - uses: actions/configure-pages@v5

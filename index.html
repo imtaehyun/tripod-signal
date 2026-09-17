@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>트라이팟 시그널</title>
+<title>나스닥 레버리지 시그널</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📐</text></svg>">
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <!-- Sets window.__SIGNAL__. A script tag is exempt from CORS, so this is the
@@ -23,16 +23,41 @@
   <p class="text-sm text-slate-500">불러오는 중…</p>
 </div>
 
-<template id="tpl">
-<!-- ── header ─────────────────────────────────────────────── -->
-<header class="mb-6 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-  <h1 class="text-lg font-semibold tracking-tight text-slate-100">
-    트라이팟 시그널 <span class="ml-1 text-sm font-normal text-slate-500">Tripod</span>
-  </h1>
-  <p class="tnum text-xs text-slate-500" data-slot="stamp"></p>
+<!-- ══ shell: header + nav, shared by every strategy ══════════════════════ -->
+<template id="tpl-shell">
+<header class="mb-5">
+  <div class="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <h1 class="text-lg font-semibold tracking-tight text-slate-100">
+      나스닥 레버리지 시그널
+      <span class="ml-1 text-sm font-normal text-slate-500">오늘 매매해야 하나</span>
+    </h1>
+    <p class="tnum text-xs text-slate-500" data-slot="stamp"></p>
+  </div>
+  <nav class="flex gap-1 border-b border-slate-800" data-slot="nav" aria-label="전략"></nav>
 </header>
+<div data-slot="body"></div>
 
-<!-- ── today card ─────────────────────────────────────────── -->
+<footer class="mt-8 space-y-2 border-t border-slate-800 pt-5 text-xs leading-relaxed text-slate-500">
+  <p>
+    <strong class="text-slate-400">투자 권유가 아니다.</strong>
+    개인 기록·자동 계산용 도구다. <strong class="text-slate-400">트라이팟</strong>의 규칙은
+    <a class="text-slate-400 underline decoration-slate-700 underline-offset-2 hover:text-slate-200"
+       href="https://www.youtube.com/watch?v=lLdRKcBSKDM" target="_blank" rel="noopener">송팀장 채널 영상(2026-09-01)</a>,
+    <strong class="text-slate-400">변동성 타겟</strong>의 추세 신호는
+    <a class="text-slate-400 underline decoration-slate-700 underline-offset-2 hover:text-slate-200"
+       href="https://www.youtube.com/watch?v=xoerEBGf5ZA" target="_blank" rel="noopener">Mallik(@RealTQQQTrader)이 공개한 규칙</a>에서
+    왔고 사이징은 내가 붙였다. 두 원저자와 무관한 독립 재구현이다.
+  </p>
+  <p>
+    데이터: 나스닥100 종가(Yahoo Finance), VIX 종가(CBOE 공식).
+    레버리지 ETF의 차입비용·경비율은 <strong class="text-slate-400">모델링하지 않았다</strong> — 이 페이지는 수익률을 계산하지 않는다.
+    과거는 미래를 보장하지 않는다.
+  </p>
+</footer>
+</template>
+
+<!-- ══ tab 1: tripod ══════════════════════════════════════════════════════ -->
+<template id="tpl-tripod">
 <section class="mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
   <div class="h-1 w-full" data-slot="gearbar"></div>
   <div class="grid gap-6 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-7">
@@ -51,13 +76,11 @@
   </div>
 </section>
 
-<!-- ── tripod legs ────────────────────────────────────────── -->
 <p class="mb-2 px-1 text-xs uppercase tracking-widest text-slate-500">
   트라이팟 — 다리 하나가 빠지면 넘어진다
 </p>
 <section class="mb-6 grid gap-3 sm:grid-cols-3" data-slot="legs"></section>
 
-<!-- ── chart ──────────────────────────────────────────────── -->
 <section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
   <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
     <h2 class="text-sm font-semibold text-slate-200">기어 타임라인 <span class="font-normal text-slate-500">최근 3년</span></h2>
@@ -70,7 +93,6 @@
   </p>
 </section>
 
-<!-- ── events ─────────────────────────────────────────────── -->
 <section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
   <h2 class="mb-1 text-sm font-semibold text-slate-200">최근 기어 변경</h2>
   <p class="mb-3 text-xs text-slate-500">판정일 종가 기준 → 체결은 다음 거래일</p>
@@ -89,7 +111,6 @@
   </div>
 </section>
 
-<!-- ── validation ─────────────────────────────────────────── -->
 <section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
   <h2 class="mb-1 text-sm font-semibold text-slate-200">재현 검증</h2>
   <p class="mb-3 text-xs leading-relaxed text-slate-500">
@@ -110,8 +131,7 @@
   </div>
 </section>
 
-<!-- ── params + disclaimer ────────────────────────────────── -->
-<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+<section class="mb-2 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
   <h2 class="mb-3 text-sm font-semibold text-slate-200">파라미터</h2>
   <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" data-slot="params"></dl>
   <p class="mt-4 border-t border-slate-800 pt-3 text-xs leading-relaxed text-slate-500">
@@ -121,22 +141,86 @@
     VIX 문턱 28은 원 저자 본인이 “최적값이 아니라 내가 감당하기로 정한 위험의 크기”라고 밝힌 튜닝 지점이다.
   </p>
 </section>
+</template>
 
-<footer class="space-y-2 border-t border-slate-800 pt-5 text-xs leading-relaxed text-slate-500">
-  <p>
-    <strong class="text-slate-400">투자 권유가 아니다.</strong>
-    개인 기록·자동 계산용 도구이며, 규칙의 출처는
-    <a class="text-slate-400 underline decoration-slate-700 underline-offset-2 hover:text-slate-200"
-       href="https://www.youtube.com/watch?v=lLdRKcBSKDM" target="_blank" rel="noopener">
-      송팀장 채널 영상(2026-09-01)</a>이다.
-    이 저장소는 그 규칙을 공개 데이터로 재구현한 것일 뿐 원 저자와 무관하다.
+<!-- ══ tab 2: vol target ══════════════════════════════════════════════════ -->
+<template id="tpl-voltarget">
+<section class="mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
+  <div class="h-1 w-full" data-slot="bar"></div>
+  <div class="grid gap-6 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-7">
+    <div class="min-w-0">
+      <p class="mb-2 text-xs font-medium uppercase tracking-widest" data-slot="verdict-kicker"></p>
+      <p class="mb-3 text-2xl font-bold leading-tight text-slate-50 sm:text-3xl" data-slot="verdict"></p>
+      <p class="text-sm leading-relaxed text-slate-400" data-slot="verdict-sub"></p>
+    </div>
+    <div class="min-w-0 sm:text-right">
+      <p class="mb-1 text-xs uppercase tracking-widest text-slate-500">목표 배분</p>
+      <p class="mb-1 text-xl font-bold tnum" data-slot="alloc"></p>
+      <p class="tnum text-sm text-slate-400" data-slot="lev"></p>
+      <p class="mt-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
+         data-slot="band-chip"></p>
+    </div>
+  </div>
+</section>
+
+<p class="mb-2 px-1 text-xs uppercase tracking-widest text-slate-500">
+  비중은 추세 ÷ 변동성으로 결정된다
+</p>
+<section class="mb-4 grid gap-3 sm:grid-cols-3" data-slot="inputs"></section>
+
+<!-- the arithmetic, spelled out, because a continuous weight is otherwise opaque -->
+<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+  <h2 class="mb-3 text-sm font-semibold text-slate-200">오늘의 계산</h2>
+  <div class="-mx-1 overflow-x-auto">
+    <div class="tnum min-w-[24rem] text-sm leading-relaxed" data-slot="math"></div>
+  </div>
+</section>
+
+<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+  <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+    <h2 class="text-sm font-semibold text-slate-200">비중 타임라인 <span class="font-normal text-slate-500">최근 3년</span></h2>
+    <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400" data-slot="legend"></div>
+  </div>
+  <div class="relative h-56 w-full overflow-hidden sm:h-72" data-slot="chart"></div>
+  <div class="relative mt-1 h-4 w-full" data-slot="xaxis"></div>
+  <p class="mt-1 text-xs text-slate-500">
+    위 = 나스닥100 종가(로그 스케일)와 250일 이동평균(점선) · 아래 = 그날의 TQQQ 목표 비중(0–100%)
   </p>
-  <p>
-    데이터: 나스닥100 종가(Yahoo Finance), VIX 종가(CBOE 공식).
-    레버리지 ETF의 차입비용·경비율은 <strong class="text-slate-400">모델링하지 않았다</strong> — 이 페이지는 수익률을 계산하지 않는다.
-    과거는 미래를 보장하지 않는다.
+</section>
+
+<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
+  <h2 class="mb-1 text-sm font-semibold text-slate-200">최근 비중 변경</h2>
+  <p class="mb-3 text-xs text-slate-500">판정일 종가 기준 → 체결은 다음 거래일</p>
+  <div class="-mx-1 overflow-x-auto">
+    <table class="w-full min-w-[26rem] border-collapse text-sm">
+      <thead>
+        <tr class="border-b border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500">
+          <th class="py-2 pr-3 font-medium">판정일</th>
+          <th class="py-2 pr-3 font-medium">체결일</th>
+          <th class="py-2 pr-3 font-medium">변경</th>
+          <th class="py-2 pr-1 font-medium">주문</th>
+        </tr>
+      </thead>
+      <tbody data-slot="events"></tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mb-6 rounded-2xl border border-amber-900/50 bg-amber-950/20 p-4 sm:p-5">
+  <h2 class="mb-2 text-sm font-semibold text-amber-200/90">트라이팟과 다른 점</h2>
+  <div class="space-y-2 text-xs leading-relaxed text-amber-100/60" data-slot="tradeoff"></div>
+</section>
+
+<section class="mb-2 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
+  <h2 class="mb-3 text-sm font-semibold text-slate-200">파라미터</h2>
+  <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" data-slot="params"></dl>
+  <p class="mt-4 border-t border-slate-800 pt-3 text-xs leading-relaxed text-slate-500">
+    <span class="font-semibold text-amber-500/90">†</span>
+    <strong class="text-slate-400">목표 변동성</strong>이 이 전략의 유일한 손잡이다.
+    최적값이 아니라 감당하기로 정한 위험의 크기이며, 올리면 수익과 낙폭이 같이 커진다
+    (트라이팟의 VIX 28과 같은 성격의 값이다). 나머지는 백테스트 숫자를 좋게 만들려고 건드릴 값이 아니다.
   </p>
-</footer>
+</section>
 </template>
 
 <script type="module">
@@ -161,21 +245,58 @@ function fail(message) {
     <p class="text-xs text-rose-200/70">${message}</p></div>`;
 }
 
-/* ── SVG timeline: gear bands + log-scale close + MA ─────────────
+/* ── shared chart scaffolding ─────────────────────────────────────
    The SVG stretches to the container with preserveAspectRatio="none" so the
    chart is legibly tall on a phone; strokes are non-scaling and every label is
-   HTML positioned in percent, so nothing gets distorted by the stretch. */
-function chart(series, gears) {
-  const W = 1000, H = 300;
-  const pts = series.filter(r => r.c && r.ma);
-  if (pts.length < 2) return null;
+   HTML positioned in percent, so nothing gets distorted by the stretch.
 
-  const all = pts.flatMap(r => [r.c, r.ma]);
+   `priceRatio` reserves the bottom of the plot for a second panel: Tripod uses
+   the whole height, Vol Target gives the lower quarter to its weight track. */
+function scaffold(pts, priceRatio = 1) {
+  const W = 1000, H = 300;
+  const PH = H * priceRatio;
+  const all = pts.flatMap(r => [r.c, r.ma250 ?? r.ma]).filter(Boolean);
   const lo = Math.log(Math.min(...all) * 0.97);
   const hi = Math.log(Math.max(...all) * 1.03);
   const x = i => (i / (pts.length - 1)) * W;
-  const y = v => (1 - (Math.log(v) - lo) / (hi - lo)) * H;
-  const yPct = v => (1 - (Math.log(v) - lo) / (hi - lo)) * 100;
+  const y = v => (1 - (Math.log(v) - lo) / (hi - lo)) * PH;
+  const yPct = v => ((1 - (Math.log(v) - lo) / (hi - lo)) * PH / H) * 100;
+
+  const yTicks = [];
+  const rawLo = Math.exp(lo), rawHi = Math.exp(hi);
+  const step = Math.pow(10, Math.floor(Math.log10(rawHi - rawLo))) * (rawHi / rawLo > 2 ? 1 : 0.5);
+  for (let v = Math.ceil(rawLo / step) * step; v < rawHi; v += step) yTicks.push({ v, pct: yPct(v) });
+
+  const xTicks = [];
+  let lastYear = pts[0].d.slice(0, 4);
+  pts.forEach((r, i) => {
+    const yr = r.d.slice(0, 4);
+    if (yr !== lastYear) { xTicks.push({ text: yr, pct: (x(i) / W) * 100 }); lastYear = yr; }
+  });
+
+  return { W, H, PH, x, y, yTicks, xTicks };
+}
+
+const yLabels = (s, ticks) => ticks.map(t =>
+  `<span class="tnum pointer-events-none absolute left-1 -translate-y-1/2 bg-slate-900/70 px-1
+     text-[0.65rem] text-slate-500" style="top:${t.pct.toFixed(2)}%">${fmt.format(Math.round(t.v))}</span>`).join('');
+
+const xLabels = ticks => ticks.map(t =>
+  `<span class="tnum absolute -translate-x-1/2 text-[0.65rem] text-slate-500"
+     style="left:${t.pct.toFixed(2)}%">${t.text}</span>`).join('');
+
+const grid = (s, ticks, xt) =>
+  ticks.map(t => `<line x1="0" y1="${s.y(t.v).toFixed(1)}" x2="${s.W}" y2="${s.y(t.v).toFixed(1)}"
+      stroke="#64748b" stroke-width="1" opacity="0.25" vector-effect="non-scaling-stroke"/>`).join('') +
+  xt.map(t => `<line x1="${(t.pct * s.W / 100).toFixed(1)}" y1="0"
+      x2="${(t.pct * s.W / 100).toFixed(1)}" y2="${s.H}" stroke="#94a3b8" stroke-width="1"
+      stroke-dasharray="3 5" opacity="0.45" vector-effect="non-scaling-stroke"/>`).join('');
+
+/* ── tripod chart: gear bands behind price ───────────────────────── */
+function tripodChart(series, gears) {
+  const pts = series.filter(r => r.c && r.ma);
+  if (pts.length < 2) return null;
+  const s = scaffold(pts, 1);
 
   // Collapse consecutive same-gear sessions into one background rect.
   const bands = [];
@@ -190,56 +311,74 @@ function chart(series, gears) {
   // gear is drawn faint and the exceptions are drawn strong.
   const OPACITY = { G3: 0.10, G15_UP: 0.34, G15_DOWN: 0.34, CASH: 0.34 };
   const rects = bands.map(b => {
-    const x0 = x(b.start);
-    const x1 = b.end === pts.length - 1 ? x(b.end) : x(b.end + 1);
+    const x0 = s.x(b.start);
+    const x1 = b.end === pts.length - 1 ? s.x(b.end) : s.x(b.end + 1);
     return `<rect x="${x0.toFixed(1)}" y="0" width="${Math.max(0.7, x1 - x0).toFixed(1)}"
-      height="${H}" fill="${gears[b.g].color}" opacity="${OPACITY[b.g]}"/>`;
+      height="${s.H}" fill="${gears[b.g].color}" opacity="${OPACITY[b.g]}"/>`;
   }).join('');
 
-  const path = key => 'M' + pts.map((r, i) => `${x(i).toFixed(1)},${y(r[key]).toFixed(1)}`).join('L');
+  const path = key => 'M' + pts.map((r, i) => `${s.x(i).toFixed(1)},${s.y(r[key]).toFixed(1)}`).join('L');
 
-  // Y gridlines at round index levels inside the visible range.
-  const yTicks = [];
-  const rawLo = Math.exp(lo), rawHi = Math.exp(hi);
-  const step = Math.pow(10, Math.floor(Math.log10(rawHi - rawLo))) * (rawHi / rawLo > 2 ? 1 : 0.5);
-  for (let v = Math.ceil(rawLo / step) * step; v < rawHi; v += step) {
-    yTicks.push({ v, pct: yPct(v) });
-  }
-
-  // One gridline per calendar-year boundary.
-  const xTicks = [];
-  let lastYear = pts[0].d.slice(0, 4);
-  pts.forEach((r, i) => {
-    const yr = r.d.slice(0, 4);
-    if (yr !== lastYear) { xTicks.push({ text: yr, pct: (x(i) / W) * 100 }); lastYear = yr; }
-  });
-
-  const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"
+  const svg = `<svg viewBox="0 0 ${s.W} ${s.H}" preserveAspectRatio="none"
     class="absolute inset-0 h-full w-full" role="img" aria-label="최근 3년 기어 타임라인">
-    ${rects}
-    ${yTicks.map(t => `<line x1="0" y1="${y(t.v).toFixed(1)}" x2="${W}" y2="${y(t.v).toFixed(1)}"
-        stroke="#64748b" stroke-width="1" opacity="0.25" vector-effect="non-scaling-stroke"/>`).join('')}
-    ${xTicks.map(t => `<line x1="${(t.pct * W / 100).toFixed(1)}" y1="0"
-        x2="${(t.pct * W / 100).toFixed(1)}" y2="${H}" stroke="#94a3b8" stroke-width="1"
-        stroke-dasharray="3 5" opacity="0.45" vector-effect="non-scaling-stroke"/>`).join('')}
+    ${rects}${grid(s, s.yTicks, s.xTicks)}
     <path d="${path('ma')}" fill="none" stroke="#94a3b8" stroke-width="1.5"
       stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
     <path d="${path('c')}" fill="none" stroke="#f8fafc" stroke-width="1.75"
       vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-  </svg>` +
-    yTicks.map(t => `<span class="tnum pointer-events-none absolute left-1 -translate-y-1/2
-      bg-slate-900/70 px-1 text-[0.65rem] text-slate-500"
-      style="top:${t.pct.toFixed(2)}%">${fmt.format(Math.round(t.v))}</span>`).join('');
+  </svg>` + yLabels(s, s.yTicks);
 
-  const axis = xTicks.map(t => `<span class="tnum absolute -translate-x-1/2 text-[0.65rem] text-slate-500"
-    style="left:${t.pct.toFixed(2)}%">${t.text}</span>`).join('');
-
-  return { svg, axis };
+  return { svg, axis: xLabels(s.xTicks) };
 }
 
-/* ── one tripod leg card with a threshold gauge ──────────────── */
-function leg({ title, why, value, unit, lo, hi, marks, cursor, ok, note }) {
-  const at = v => `${(100 * (v - lo) / (hi - lo)).toFixed(2)}%`;
+/* ── vol target chart: price on top, weight step-area below ──────── */
+function weightChart(series, bands) {
+  const pts = series.filter(r => r.c && r.w !== null && r.w !== undefined)
+    .map(r => ({ ...r, ma250: r.ma?.['250'] }));
+  if (pts.length < 2) return null;
+  const s = scaffold(pts, 0.68);
+  const TOP = s.PH + 20;                 // where the weight panel starts
+  const BH = s.H - TOP;                  // its height
+  const wy = w => TOP + (1 - w) * BH;
+
+  // Weight is a step function — it holds until the deadband releases — so it is
+  // drawn as steps, not interpolated. Interpolating would imply daily drift the
+  // rule does not actually ask for.
+  let d = `M${s.x(0).toFixed(1)},${wy(pts[0].w).toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    d += `L${s.x(i).toFixed(1)},${wy(pts[i - 1].w).toFixed(1)}`;
+    d += `L${s.x(i).toFixed(1)},${wy(pts[i].w).toFixed(1)}`;
+  }
+  const area = `${d}L${s.x(pts.length - 1).toFixed(1)},${(TOP + BH).toFixed(1)}L${s.x(0).toFixed(1)},${(TOP + BH).toFixed(1)}Z`;
+
+  const path = key => 'M' + pts.map((r, i) => `${s.x(i).toFixed(1)},${s.y(r[key]).toFixed(1)}`).join('L');
+  const hasMa = pts.every(p => p.ma250);
+
+  const gl = [0.5, 1].map(w =>
+    `<line x1="0" y1="${wy(w).toFixed(1)}" x2="${s.W}" y2="${wy(w).toFixed(1)}" stroke="#64748b"
+       stroke-width="1" opacity="0.3" stroke-dasharray="2 4" vector-effect="non-scaling-stroke"/>`).join('');
+
+  const svg = `<svg viewBox="0 0 ${s.W} ${s.H}" preserveAspectRatio="none"
+    class="absolute inset-0 h-full w-full" role="img" aria-label="최근 3년 목표 비중 타임라인">
+    ${grid(s, s.yTicks, s.xTicks)}
+    ${hasMa ? `<path d="${path('ma250')}" fill="none" stroke="#94a3b8" stroke-width="1.5"
+      stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>` : ''}
+    <path d="${path('c')}" fill="none" stroke="#f8fafc" stroke-width="1.75"
+      vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+    ${gl}
+    <path d="${area}" fill="#dc2626" opacity="0.22"/>
+    <path d="${d}" fill="none" stroke="#dc2626" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+  </svg>` + yLabels(s, s.yTicks) +
+    [0, 0.5, 1].map(w => `<span class="tnum pointer-events-none absolute left-1 -translate-y-1/2
+      bg-slate-900/70 px-1 text-[0.65rem] text-slate-500"
+      style="top:${(wy(w) / s.H * 100).toFixed(2)}%">${(w * 100).toFixed(0)}%</span>`).join('');
+
+  return { svg, axis: xLabels(s.xTicks) };
+}
+
+/* ── one gauge card, shared by both tabs ─────────────────────────── */
+function gauge({ title, why, value, unit, lo, hi, marks, cursor, ok, okLabel, badLabel, note }) {
+  const at = v => `${Math.max(0, Math.min(100, 100 * (v - lo) / (hi - lo))).toFixed(2)}%`;
   const marker = m => `
     <div class="absolute top-0 h-full w-px" style="left:${at(m.v)};background:${m.color}">
       <span class="absolute -top-0.5 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full"
@@ -248,7 +387,7 @@ function leg({ title, why, value, unit, lo, hi, marks, cursor, ok, note }) {
   return `<div class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
     <div class="mb-0.5 flex items-baseline justify-between gap-2">
       <h3 class="truncate text-xs font-semibold uppercase tracking-wider text-slate-400">${title}</h3>
-      <span class="shrink-0 text-xs ${ok ? 'text-emerald-400' : 'text-amber-400'}">${ok ? '통과' : '작동'}</span>
+      <span class="shrink-0 text-xs ${ok ? 'text-emerald-400' : 'text-amber-400'}">${ok ? (okLabel ?? '통과') : (badLabel ?? '작동')}</span>
     </div>
     <p class="mb-2 truncate text-[0.7rem] text-slate-500">${why}</p>
     <p class="tnum mb-3 text-2xl font-bold text-slate-50">${value}<span
@@ -262,14 +401,17 @@ function leg({ title, why, value, unit, lo, hi, marks, cursor, ok, note }) {
   </div>`;
 }
 
-/* ── render ─────────────────────────────────────────────────── */
-function render(d) {
-  const node = document.getElementById('tpl').content.cloneNode(true);
-  const L = d.latest, P = d.params, G = d.gears, S = d.stats;
+const dash = (label, value, inferred) =>
+  `<div class="flex min-w-0 items-baseline justify-between gap-3 border-b border-slate-800/60 pb-1.5">
+    <dt class="truncate text-slate-400">${label}${inferred ? '<span class="text-amber-500/90"> †</span>' : ''}</dt>
+    <dd class="tnum shrink-0 font-medium text-slate-200">${value}</dd></div>`;
+
+/* ── tab 1 render ────────────────────────────────────────────────── */
+function renderTripod(st) {
+  const node = document.getElementById('tpl-tripod').content.cloneNode(true);
+  const L = st.latest, P = st.params, G = st.gears, S = st.stats;
   const gear = G[L.gear];
 
-  $(node, 'stamp').textContent =
-    `판정 ${L.date} 종가 · 갱신 ${d.generated_at.slice(0, 16).replace('T', ' ')}Z`;
   $(node, 'gearbar').style.background = gear.color;
 
   /* Three states, not two: a gear key can change while the book does not. */
@@ -322,10 +464,9 @@ function render(d) {
   chip.style.borderColor = gear.color + '66';
   chip.style.background = gear.color + '14';
 
-  /* legs */
   const ma = L.legs.ma, vx = L.legs.vix, dd = L.legs.dd;
   $(node, 'legs').innerHTML = [
-    leg({
+    gauge({
       title: `250일선 · 방향`, why: '추세가 살아 있는가',
       value: pct(ma.dist_pct), unit: '', lo: -0.15, hi: 0.15,
       cursor: ma.dist_pct / 100,
@@ -334,7 +475,7 @@ function render(d) {
       note: `종가 ${fmt.format(L.close)} · MA ${fmt.format(ma.value)}<br>
              전환까지 상승선 ${pct(ma.to_up_pct)} · 하락선 ${pct(ma.to_down_pct)}`,
     }),
-    leg({
+    gauge({
       title: `VIX ${P.vix_ma_length}일 평균 · 공포`, why: '지금 얼마나 무서워하는가',
       value: fmt.format(vx.value), unit: '', lo: 8, hi: 45, cursor: vx.value,
       marks: [{ v: P.vix_panic, color: '#0ea5e9' }, { v: P.vix_hot, color: '#dc2626' }],
@@ -342,7 +483,7 @@ function render(d) {
       note: `28(감속)까지 ${vx.to_hot > 0 ? '+' : ''}${vx.to_hot} ·
              18(현금 문턱)까지 ${vx.to_panic > 0 ? '+' : ''}${vx.to_panic}`,
     }),
-    leg({
+    gauge({
       title: '52주 낙폭 · 피로도', why: '고점에서 얼마나 멀어졌는가',
       value: dd.value.toFixed(2), unit: '%', lo: -0.25, hi: 0, cursor: dd.value / 100,
       marks: [{ v: P.dd_trigger, color: '#dc2626' }],
@@ -352,20 +493,15 @@ function render(d) {
     }),
   ].join('');
 
-  /* chart + legend */
-  const c = chart(d.series, G);
-  if (c) {
-    $(node, 'chart').innerHTML = c.svg;
-    $(node, 'xaxis').innerHTML = c.axis;
-  }
+  const c = tripodChart(st.series, G);
+  if (c) { $(node, 'chart').innerHTML = c.svg; $(node, 'xaxis').innerHTML = c.axis; }
   $(node, 'legend').innerHTML = Object.entries(G).map(([k, g]) =>
     `<span class="inline-flex items-center gap-1.5 whitespace-nowrap">
        <span class="h-2.5 w-2.5 rounded-sm" style="background:${g.color}"></span>
        ${g.ko}<span class="tnum text-slate-600">${S.occupancy_pct[k] ?? 0}%</span>
      </span>`).join('');
 
-  /* events */
-  $(node, 'events').innerHTML = d.events.filter(e => e.from).slice(-12).reverse().map(e => {
+  $(node, 'events').innerHTML = st.events.filter(e => e.from).slice(-12).reverse().map(e => {
     const up = G[e.to].leverage > G[e.from].leverage;
     const arrow = !e.trade ? '주문 없음' : up ? '↑ 증속' : '↓ 감속';
     const tone = !e.trade ? 'text-slate-500' : up ? 'text-emerald-400' : 'text-amber-400';
@@ -375,7 +511,8 @@ function render(d) {
       : '보유 종목 동일';
     return `<tr class="border-b border-slate-800/60 last:border-0 ${e.trade ? '' : 'opacity-60'}">
       <td class="tnum py-2 pr-3 text-slate-400">${e.date}</td>
-      <td class="tnum py-2 pr-3 text-slate-300">${e.exec_date ?? '—'}</td>
+      <td class="tnum py-2 pr-3 text-slate-300">${e.exec_date
+        ?? '<span class="text-amber-400">다음 거래일</span>'}</td>
       <td class="py-2 pr-3">
         <span style="color:${G[e.from].color}">${G[e.from].leverage}x</span>
         <span class="text-slate-600">→</span>
@@ -386,7 +523,6 @@ function render(d) {
     </tr>`;
   }).join('');
 
-  /* validation */
   const rows = [
     ['백테스트 기간', '35년', `${S.span_years}년`, true],
     ['연평균 매매 횟수', '8.1회', `${S.changes_per_year}회`, true],
@@ -414,11 +550,6 @@ function render(d) {
       나머지 5개 지표가 모두 일치하므로 파라미터 추론 자체는 맞다고 본다.
     </td></tr>`;
 
-  /* params */
-  const dash = (label, value, inferred) =>
-    `<div class="flex min-w-0 items-baseline justify-between gap-3 border-b border-slate-800/60 pb-1.5">
-      <dt class="truncate text-slate-400">${label}${inferred ? '<span class="text-amber-500/90"> †</span>' : ''}</dt>
-      <dd class="tnum shrink-0 font-medium text-slate-200">${value}</dd></div>`;
   $(node, 'params').innerHTML = [
     dash('기준 지수', '^NDX (나스닥100)', true),
     dash('이동평균', `${P.ma_length}일 ${P.ma_kind.toUpperCase()}`, true),
@@ -434,8 +565,234 @@ function render(d) {
     dash('VIX 결측 보정', `${S.vix_filled_sessions}거래일 전일값 사용`, false),
   ].join('');
 
-  app.replaceChildren(node);
+  return node;
 }
+
+/* ── tab 2 render ────────────────────────────────────────────────── */
+function renderVolTarget(st, tripodStats) {
+  const node = document.getElementById('tpl-voltarget').content.cloneNode(true);
+  const L = st.latest, P = st.params, S = st.stats, I = L.inputs;
+
+  $(node, 'bar').style.background = L.color;
+
+  const acted = L.action_required;
+  $(node, 'verdict-kicker').textContent = acted ? '리밸런싱 필요' : '오늘 할 일';
+  $(node, 'verdict-kicker').style.color = acted ? L.color : '#64748b';
+  $(node, 'verdict').textContent = acted ? '아래 주문을 낸다' : '아무것도 하지 않는다';
+
+  if (acted) {
+    const buying = L.side === 'buy';
+    $(node, 'verdict-sub').innerHTML = `
+      <span class="mb-2 block">
+        TQQQ <strong class="text-slate-300">${(L.prev_weight * 100).toFixed(0)}%</strong> →
+        <strong style="color:${L.color}">${L.weight_pct.toFixed(0)}%</strong> ·
+        규칙상 <strong class="text-slate-300">다음 거래일</strong>에 체결한다.
+      </span>
+      <span class="block">
+        계좌의 <strong class="tnum ${buying ? 'text-emerald-400' : 'text-amber-400'}">${Math.abs(L.delta_pp).toFixed(0)}%p</strong>
+        만큼 <span class="tnum font-semibold text-slate-100">TQQQ</span>
+        <strong class="${buying ? 'text-emerald-400' : 'text-amber-400'}">${buying ? '추가 매수' : '매도'}</strong>
+        → 최종 <span class="tnum font-semibold text-slate-100">TQQQ ${L.weight_pct.toFixed(0)}% / 현금 ${L.cash_pct.toFixed(0)}%</span>
+      </span>`;
+  } else {
+    $(node, 'verdict-sub').innerHTML =
+      `<strong class="text-slate-300">${L.days_since_change}일</strong>째
+       (${L.sessions_since_change} 거래일) 변경 없음.
+       원시 목표가 <strong class="tnum text-slate-300">${I.release_down_pct.toFixed(0)}%</strong> 아래나
+       <strong class="tnum text-slate-300">${I.release_up_pct.toFixed(0)}%</strong> 위로 가야
+       데드밴드가 풀린다. 이 전략은 연평균 ${S.changes_per_year}회 움직인다 —
+       트라이팟(${tripodStats.changes_per_year}회)보다 훨씬 자주다.`;
+  }
+
+  $(node, 'alloc').textContent = `TQQQ ${L.weight_pct.toFixed(0)}% / 현금 ${L.cash_pct.toFixed(0)}%`;
+  $(node, 'alloc').style.color = L.color;
+  $(node, 'lev').textContent = `계좌 배수 ${L.leverage.toFixed(2)}x`;
+
+  const chip = $(node, 'band-chip');
+  chip.textContent = L.band_ko;
+  chip.style.color = L.color;
+  chip.style.borderColor = L.color + '66';
+  chip.style.background = L.color + '14';
+
+  /* three inputs */
+  const lens = P.ma_lengths;
+  /* The vote counts LATCHED legs, not raw comparisons. Inside the ±1% band a leg
+     keeps its old state, so a leg can read "on" while price sits just below its
+     MA — mark those so the vote never looks like an arithmetic error. */
+  const maList = lens.map(n => {
+    const k = String(n);
+    const on = I.legs?.[k] ?? I.ma_above[k];
+    const carried = I.legs && I.legs[k] !== I.ma_above[k];
+    return `${n}일 <span class="${on ? 'text-emerald-400' : 'text-slate-600'}">${on ? '켜짐' : '꺼짐'}</span>` +
+           `<span class="text-slate-600">${I.ma_dist_pct ? ` ${pct(I.ma_dist_pct[k], 1)}` : ''}${carried ? '*' : ''}</span>`;
+  }).join(' · ');
+  const anyCarried = I.legs && lens.some(n => I.legs[String(n)] !== I.ma_above[String(n)]);
+  const heldBefore = 100 * L.prev_weight;
+  /* The deadband is tested against the SNAPPED target, not the raw number, so
+     that is the gap to report. Raw 98.3% snaps to 100%, which is 10pp from a
+     held 90% and therefore releases — quoting the raw gap (8pp) would look like
+     it fired below its own threshold. */
+  const snappedPct = Math.round(I.raw_pct / I.step_pp) * I.step_pp;
+  const gapPct = Math.abs(snappedPct - heldBefore);
+
+  $(node, 'inputs').innerHTML = [
+    gauge({
+      title: '추세 투표 · 방향', why: `${lens.join('/')}일선 중 몇 개가 켜졌나`,
+      value: `${I.above}/${I.of}`, unit: '', lo: 0, hi: 1, cursor: I.vote,
+      marks: [{ v: 0.5, color: '#f59e0b' }],
+      ok: I.vote >= 0.5, okLabel: '추세', badLabel: '약세',
+      note: maList + (anyCarried
+        ? `<br><span class="text-slate-600">* ±${I.ma_band_pct}% 밴드 안이라 직전 상태 유지</span>` : ''),
+    }),
+    gauge({
+      title: '실현변동성 · 속도', why: `${P.vol_windows.join('·')}일 표준편차 평균`,
+      value: I.rvol_pct.toFixed(1), unit: '%', lo: 5, hi: 60, cursor: I.rvol_pct,
+      marks: [{ v: 25, color: '#f59e0b' }, { v: 40, color: '#dc2626' }],
+      ok: I.rvol_pct < 25, okLabel: '평온', badLabel: '높음',
+      note: `높을수록 비중이 줄어든다. 3배 ETF의 변동성 감쇠는<br>−3σ²라서 변동성에 제곱으로 비례한다.`,
+    }),
+    gauge({
+      /* The band is measured against what was held BEFORE today's decision. On
+         a day that fires, comparing against the new weight would show a 2pp gap
+         and make the trade look unmotivated. */
+      title: '데드밴드 · 관성', why: '원시 목표가 보유에서 얼마나 벌어졌나',
+      value: I.raw_pct.toFixed(0), unit: '%', lo: 0, hi: 100, cursor: I.raw_pct,
+      marks: [{ v: heldBefore, color: '#dc2626' }],
+      ok: !acted, okLabel: '유지', badLabel: '해제',
+      note: acted
+        ? `원시 ${I.raw_pct.toFixed(0)}% → ${I.step_pp}%p 격자 ${snappedPct.toFixed(0)}%,
+           보유 ${heldBefore.toFixed(0)}%와 ${gapPct.toFixed(0)}%p 차 —
+           <strong class="text-amber-400">${I.band_pp}%p 이상이라 해제</strong>`
+        : `흰 눈금 = 원시 목표 ${I.raw_pct.toFixed(0)}% · 붉은 눈금 = 보유 ${heldBefore.toFixed(0)}%<br>
+           격자 ${snappedPct.toFixed(0)}%와 ${gapPct.toFixed(0)}%p 차 · ${I.band_pp}%p 넘으면 조정`,
+    }),
+  ].join('');
+
+  /* the arithmetic, spelled out */
+  const chunk = (label, value) =>
+    `<div class="flex items-baseline justify-between gap-3 border-b border-slate-800/60 py-1.5">
+       <span class="text-slate-400">${label}</span>
+       <span class="shrink-0 font-medium text-slate-200">${value}</span></div>`;
+  $(node, 'math').innerHTML =
+    chunk('추세 투표 (켜진 이동평균 수)', `${I.above} / ${I.of} = ${I.vote.toFixed(2)}`) +
+    chunk('목표 변동성 ÷ (3배 × 실현변동성)',
+          `${I.target_vol_pct}% ÷ (3 × ${I.rvol_pct.toFixed(1)}%) = ${(I.target_vol_pct / (3 * I.rvol_pct)).toFixed(2)}`) +
+    chunk('원시 목표 = 투표 × 위 값', `${I.raw_pct.toFixed(1)}%`) +
+    chunk(`${I.step_pp}%p 격자로 반올림`, `${(Math.round(I.raw_pct / I.step_pp) * I.step_pp).toFixed(0)}%`) +
+    chunk(`데드밴드(${I.band_pp}%p) 적용 후 <strong class="text-slate-300">실행 비중</strong>`,
+          `<strong style="color:${L.color}">TQQQ ${L.weight_pct.toFixed(0)}%</strong>`);
+
+  /* chart */
+  const c = weightChart(st.series, null);
+  if (c) { $(node, 'chart').innerHTML = c.svg; $(node, 'xaxis').innerHTML = c.axis; }
+  $(node, 'legend').innerHTML =
+    `<span class="inline-flex items-center gap-1.5 whitespace-nowrap">
+       <span class="h-2.5 w-2.5 rounded-sm bg-red-600/40"></span>TQQQ 목표 비중
+       <span class="tnum text-slate-600">평균 ${S.avg_weight_pct}%</span></span>
+     <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
+       <span class="h-2.5 w-2.5 rounded-sm" style="background:#64748b"></span>전량 현금
+       <span class="tnum text-slate-600">${S.fully_cash_pct}%</span></span>
+     <span class="tnum whitespace-nowrap text-slate-600">평균 배수 ${S.avg_leverage}x</span>`;
+
+  /* events */
+  $(node, 'events').innerHTML = st.events.filter(e => e.from !== null).slice(-12).reverse().map(e => {
+    const up = e.delta > 0;
+    const tone = up ? 'text-emerald-400' : 'text-amber-400';
+    return `<tr class="border-b border-slate-800/60 last:border-0">
+      <td class="tnum py-2 pr-3 text-slate-400">${e.date}</td>
+      <td class="tnum py-2 pr-3 text-slate-300">${e.exec_date
+        ?? '<span class="text-amber-400">다음 거래일</span>'}</td>
+      <td class="tnum py-2 pr-3">
+        <span class="text-slate-500">${(e.from * 100).toFixed(0)}%</span>
+        <span class="text-slate-600">→</span>
+        <span class="font-semibold text-slate-200">${(e.to * 100).toFixed(0)}%</span>
+      </td>
+      <td class="tnum py-2 pr-1 whitespace-nowrap text-xs ${tone}">
+        ${up ? '↑ 매수' : '↓ 매도'} ${Math.abs(e.delta * 100).toFixed(0)}%p</td>
+    </tr>`;
+  }).join('');
+
+  /* honest tradeoff against the other tab */
+  $(node, 'tradeoff').innerHTML = `
+    <p><strong class="text-amber-200/80">손이 훨씬 많이 간다.</strong>
+      연 <span class="tnum">${S.changes_per_year}회</span> 움직인다. 트라이팟은
+      <span class="tnum">${tripodStats.changes_per_year}회</span>다. 최장 무변경 구간도
+      <span class="tnum">${S.longest_no_change_days}일</span> vs
+      <span class="tnum">${tripodStats.longest_no_change_days}일</span>이다.
+      “매일 볼 이유가 없다”는 트라이팟의 장점이 여기서는 성립하지 않는다.</p>
+    <p><strong class="text-amber-200/80">과세계좌에서는 불리하다.</strong>
+      회전이 5배 가까이 높아 세금이 성과 우위를 상당 부분 먹는다.
+      세금 없는 계좌가 아니면 목표 변동성을 올려 회전을 낮추는 편이 낫다.</p>
+    <p><strong class="text-amber-200/80">변동성은 뒤를 본다.</strong>
+      ${P.vol_windows.join('·')}일 창이라 급락 <em>이후에</em> 비중을 줄인다.
+      1987년·2020년 같은 갭 하락의 첫 방은 그대로 맞는다.</p>
+    <p><strong class="text-amber-200/80">히스테리시스는 트라이팟에서 빌려왔다.</strong>
+      이동평균 4개 각각에 ±${I.ma_band_pct}% 밴드를 둬 밴드 안에서는 직전 상태를 유지한다.
+      이게 없으면 이동평균 하나를 스치는 것만으로 목표가 25%p 움직여 데드밴드를 뚫고,
+      50일선 근처에서 하루 만에 45%p를 왕복한다. 넣으면 같은 주 내 반전이 95회 → 9회로 줄고
+      낙폭은 오히려 좋아진다. 성과를 위한 손질이 아니라 <em>운용 가능성</em>을 산 것이다.</p>
+    <p><strong class="text-amber-200/80">VIX를 쓰지 않는다.</strong>
+      그래서 히스토리가 트라이팟보다 4년 길고(<span class="tnum">${S.span_years}년</span> vs
+      <span class="tnum">${tripodStats.span_years}년</span>) CBOE 파일에 의존하지 않는다.</p>`;
+
+  $(node, 'params').innerHTML = [
+    dash('기준 지수', '^NDX (나스닥100)', false),
+    dash('추세 이동평균', `${P.ma_lengths.join(' / ')}일 ${P.ma_kind.toUpperCase()}`, false),
+    dash('이동평균 밴드', `±${(P.ma_band * 100).toFixed(0)}% (직전 상태 유지)`, false),
+    dash('변동성 창', `${P.vol_windows.join(' / ')}일 표준편차 평균`, false),
+    dash('목표 변동성', `${(P.target_vol * 100).toFixed(0)}%`, true),
+    dash('대상 ETF 배수', `${P.etf_leverage}x (TQQQ)`, false),
+    dash('최대 비중', `${(P.max_weight * 100).toFixed(0)}%`, false),
+    dash('비중 격자', `${(P.weight_step * 100).toFixed(0)}%p`, false),
+    dash('리밸런싱 밴드', `${(P.rebalance_band * 100).toFixed(0)}%p`, false),
+    dash('변동성 하한', `${(P.vol_floor * 100).toFixed(0)}%`, false),
+    dash('체결', '판정 다음 거래일', false),
+    dash('평균 비중', `${S.avg_weight_pct}% (배수 ${S.avg_leverage}x)`, false),
+    dash('전량 현금 비율', `${S.fully_cash_pct}% of ${S.sessions}거래일`, false),
+  ].join('');
+
+  return node;
+}
+
+/* ── shell + routing ─────────────────────────────────────────────── */
+const RENDERERS = {
+  tripod: d => renderTripod(d.strategies.tripod),
+  voltarget: d => renderVolTarget(d.strategies.voltarget, d.strategies.tripod.stats),
+};
+
+function render(d, key) {
+  const nav = d.nav ?? [{ key: 'tripod', ko: '트라이팟' }];
+  const active = RENDERERS[key] ? key : nav[0].key;
+
+  const shell = document.getElementById('tpl-shell').content.cloneNode(true);
+
+  const tLast = d.strategies.tripod.latest.date;
+  const vLast = d.strategies.voltarget.latest.date;
+  const judged = active === 'tripod' ? tLast : vLast;
+  $(shell, 'stamp').textContent =
+    `판정 ${judged} 종가 · 갱신 ${d.generated_at.slice(0, 16).replace('T', ' ')}Z`;
+
+  /* Nav doubles as the alert surface: a tab whose strategy wants a trade today
+     carries a dot, so switching tabs is never how you find out. */
+  $(shell, 'nav').innerHTML = nav.map(s => {
+    const on = s.key === active;
+    const st = d.strategies[s.key];
+    const alert = st?.latest?.action_required;
+    return `<a href="#${s.key}"
+      class="-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors
+             ${on ? 'border-slate-200 font-semibold text-slate-100'
+                  : 'border-transparent text-slate-500 hover:border-slate-700 hover:text-slate-300'}"
+      ${on ? 'aria-current="page"' : ''}>
+      ${s.ko}
+      ${alert ? `<span class="h-1.5 w-1.5 rounded-full bg-red-500" title="리밸런싱 필요"></span>` : ''}
+    </a>`;
+  }).join('');
+
+  $(shell, 'body').replaceChildren(RENDERERS[active](d));
+  app.replaceChildren(shell);
+}
+
+const currentKey = () => (location.hash || '').replace(/^#/, '');
 
 /* data/signal.js sets window.__SIGNAL__ and works from any origin including
    file://. Over http the fetch path is preferred so a cached signal.js can
@@ -443,16 +800,21 @@ function render(d) {
 const embedded = window.__SIGNAL__;
 const isFile = location.protocol === 'file:';
 
+function boot(d) {
+  render(d, currentKey());
+  addEventListener('hashchange', () => render(d, currentKey()));
+}
+
 if (isFile) {
   embedded
-    ? render(embedded)
+    ? boot(embedded)
     : fail('data/signal.js 를 찾을 수 없다. <code class="text-slate-300">python scripts/signal.py</code> 를 실행해 생성하라.');
 } else {
   fetch(`data/signal.json?v=${Date.now()}`)
     .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-    .then(render)
+    .then(boot)
     .catch(e => embedded
-      ? render(embedded)
+      ? boot(embedded)
       : fail(`data/signal.json — ${e.message}`));
 }
 </script>
