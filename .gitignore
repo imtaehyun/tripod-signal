@@ -5,3 +5,6 @@ __pycache__/
 # Derived data: regenerated on every run, never stored. See docs/adr/0001.
 data/signal.json
 data/signal.js
+
+# Wrangler local state for scheduler/
+.wrangler/

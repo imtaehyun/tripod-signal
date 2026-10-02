@@ -97,10 +97,9 @@ def live(symbol: str) -> dict:
 def wait_for_window(margin_seconds: int = 0) -> str:
     """Sleep until 15:45 ET if the job started early, then report the state.
 
-    GitHub Actions cron fires late under load -- routinely by several minutes,
-    occasionally by much more. So the workflow schedules the job EARLY and this
-    function absorbs the jitter, instead of the schedule trying to hit a
-    5-minute window it does not control. Blocking is free on a public repo.
+    The Cloudflare Worker in scheduler/ dispatches the run at 15:30 ET (ADR 0006)
+    and this function absorbs the remaining minutes, instead of the trigger
+    trying to hit a 5-minute window. Blocking is free on a public repo.
     """
     import time
 

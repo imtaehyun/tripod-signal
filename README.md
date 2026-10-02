@@ -237,10 +237,11 @@ refinement ever tried here, combined. Using a 15:45 price for the *signal* costs
 nothing, because the ±1% latch bands absorb the 0.44% residual move; see ADR 0005
 for the measurement.
 
-Cron fires ~20 minutes early and `scripts/quote.py` sleeps to 15:45, because
-Actions cron runs late under load. Two crons exist for DST (there is no single UTC
-hour that is 15:45 ET year-round, unlike [ADR 0003](docs/adr/0003-fixed-utc-cron.md));
-the wrong one lands outside the session and is skipped.
+The intraday run is started at 15:30 ET by a Cloudflare Worker in
+[`scheduler/`](scheduler/) through `workflow_dispatch`, and `scripts/quote.py`
+sleeps to 15:45. GitHub's own cron fired that schedule 3.5–4.5 hours late every
+day, so it never landed inside the session ([ADR 0006](docs/adr/0006-cloudflare-intraday-trigger.md)).
+The settled run tolerates that delay and stays on GitHub cron.
 
 **Notification: every run sends exactly one message, including quiet days.** That
 is the whole point — *a silent failure and a quiet day are indistinguishable*, so
@@ -257,6 +258,11 @@ older one *for that strategy only*. The two strategies alert independently; a
 regime-only Tripod change opens nothing.
 
 Secrets required: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+
+The Worker needs its own secrets, set with `wrangler secret put` from `scheduler/`:
+`GITHUB_TOKEN` (fine-grained PAT, this repository only, `Actions: read and write`)
+and optionally the same two Telegram values, used only to report a failed
+dispatch. Deploy with `wrangler deploy` from `scheduler/`.
 
 It is a single job on purpose: the derived signal is never committed, so a
 separate deploy job would check out a tree without it.

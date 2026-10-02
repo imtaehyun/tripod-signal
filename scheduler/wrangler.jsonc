@@ -1,0 +1,19 @@
+{
+  // Cron-only Worker: no fetch handler, no public URL. See ADR 0006.
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "tripod-signal-scheduler",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": false,
+  "triggers": {
+    // 15:30 ET is 19:30 UTC in EDT and 20:30 UTC in EST. The Worker drops
+    // whichever one is not 15:xx ET today. 1-5 in UTC is the same US weekday
+    // at these hours.
+    "crons": ["30 19 * * 1-5", "30 20 * * 1-5"]
+  },
+  "observability": { "enabled": true }
+  // Secrets (wrangler secret put):
+  //   GITHUB_TOKEN        fine-grained PAT, this repo only, Actions: read and write
+  //   TELEGRAM_BOT_TOKEN  optional, same values as the repo secrets; used only
+  //   TELEGRAM_CHAT_ID    to report a failed dispatch
+}

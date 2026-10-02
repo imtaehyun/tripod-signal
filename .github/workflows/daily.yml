@@ -8,16 +8,13 @@ name: daily signal
 #   settled  (after close) the RECORD run. Appends the real closes, re-derives
 #                        from settled data, opens the rebalance issue, deploys.
 #
-# Cron is scheduled ~20 minutes EARLY and scripts/quote.py sleeps to 15:45 ET,
-# because Actions cron fires late under load and a 5-minute window is not
-# something the scheduler can be trusted to hit. The DST pair exists because
-# Actions cron has no timezone: 15:25 ET is 19:25 UTC in summer and 20:25 UTC in
-# winter. Whichever one is wrong for the current half of the year lands outside
-# the session and the guard step skips it.
+# The intraday run is started by a Cloudflare Worker (scheduler/) via
+# workflow_dispatch at 15:30 ET, and scripts/quote.py sleeps to 15:45 ET.
+# GitHub's own cron fired that schedule 3.5-4.5 hours late every day, so it
+# never once landed inside the session. See ADR 0006. The settled run tolerates
+# hours of delay and stays on GitHub cron.
 on:
   schedule:
-    - cron: "25 19 * * 1-5"   # 15:25 EDT -> intraday
-    - cron: "25 20 * * 1-5"   # 15:25 EST -> intraday
     - cron: "0 23 * * 1-5"    # after the close in both halves -> settled (ADR 0003)
   push:
     branches: [main]
@@ -64,18 +61,12 @@ jobs:
         id: mode
         run: |
           case "${{ github.event_name }}" in
-            schedule)
-              if [ "${{ github.event.schedule }}" = "0 23 * * 1-5" ]; then
-                echo "mode=settled"  >> "$GITHUB_OUTPUT"
-              else
-                echo "mode=intraday" >> "$GITHUB_OUTPUT"
-              fi ;;
             workflow_dispatch) echo "mode=${{ inputs.mode }}" >> "$GITHUB_OUTPUT" ;;
             *)                 echo "mode=settled"           >> "$GITHUB_OUTPUT" ;;
           esac
 
       # For the intraday run: sleep to 15:45 ET, then bail out if we are not
-      # actually in the session (the wrong half of the DST pair, or a holiday).
+      # actually in the session (a holiday, or a manual dispatch off-hours).
       # `outcome=skip` short-circuits every later step but still lets the
       # notifier explain why nothing was sent.
       - name: Wait for the 15:45 ET window
@@ -96,7 +87,7 @@ jobs:
         if: steps.mode.outputs.mode == 'intraday' && steps.window.outputs.go != 'true'
         run: |
           echo "::notice::intraday run skipped (${{ steps.window.outputs.reason }})"
-          echo "Not in the session — wrong half of the DST cron pair, or a market holiday."
+          echo "Not in the session — a market holiday, or dispatched outside 15:45-16:30 ET."
 
       # ── settled run only ────────────────────────────────────────────────────
       # NEVER run this in intraday mode. fetch.py is append-only and an existing
@@ -207,7 +198,7 @@ jobs:
       # Deploy ONLY if this run actually derived a signal. data/signal.json is
       # gitignored (ADR 0001), so it exists only in the workspace of a job that
       # generated it -- deploying a run that skipped derivation (market holiday,
-      # or the wrong half of the DST cron pair) would upload a tree with no data
+      # or an off-hours dispatch) would upload a tree with no data
       # and replace the live dashboard with its "signal.json not found" error.
       - uses: actions/configure-pages@v5
         if: steps.signal.outcome == 'success'
