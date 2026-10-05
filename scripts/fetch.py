@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Fetch daily closes for ^NDX and ^VIX into append-only CSVs.
 
+Also rewrites data/etf.csv (QQQ/QLD/TQQQ) for the tripod chart; display only,
+see write_etf_csv.
+
 Zero third-party dependencies on purpose: this has to still run in GitHub
 Actions years from now without a lockfile rotting out from under it.
 
@@ -221,6 +224,40 @@ def main() -> None:
         print(f"  {key}: +{added} new dates (through {rows[-1][0]})")
         total_new += added
     print(f"fetch: {total_new} new dates total")
+
+    write_etf_csv(cutoff)
+
+
+# ── ETF closes: display only ────────────────────────────────────────────────
+# The tripod chart overlays the three ETFs it actually holds. No rule reads
+# these, so they get the opposite policy to ndx/vix: the file is REWRITTEN from
+# Yahoo every run instead of appended to. Yahoo's `close` is split-adjusted
+# retroactively, so an append-only file would carry a cliff at every future
+# split. A failed fetch keeps the previous file and never fails the run.
+ETFS = ("QQQ", "QLD", "TQQQ")
+ETF_SESSIONS = 1300   # ~5 years; the chart shows at most 3
+
+
+def write_etf_csv(cutoff: str) -> None:
+    cols: dict[str, dict[str, float]] = {}
+    for sym in ETFS:
+        for host in ("query1", "query2"):
+            try:
+                cols[sym] = {d: c for d, c in from_yahoo(sym, host) if d <= cutoff}
+                break
+            except Exception as exc:  # noqa: BLE001 - display data must not fail the run
+                print(f"  etf: {sym} via {host} failed ({exc})")
+        else:
+            print(f"  etf: WARNING keeping previous etf.csv, {sym} unavailable")
+            return
+    days = sorted(set().union(*cols.values()))[-ETF_SESSIONS:]
+    path = os.path.join(DATA, "etf.csv")
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["date", *ETFS])
+        for day in days:
+            writer.writerow([day, *(f"{cols[s][day]:.4f}" if day in cols[s] else "" for s in ETFS)])
+    print(f"  etf: {len(days)} sessions written ({days[0]} .. {days[-1]})")
 
 
 if __name__ == "__main__":

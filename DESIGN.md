@@ -211,14 +211,29 @@ word and amount take the side colour; the ticker stays `text`.
 **Tabs.** Text tabs, the active one has `text` colour, weight 600 and a 2px `text`
 underline. A tab whose strategy wants an order carries a 6px `text`-coloured dot.
 
-**Leg / input rows.** Label left, mono value right, then a 2px `lev-0` track with
-1px `text-muted` threshold ticks and a 10px `text` marker, then a 12px caption.
-Vol Target's four MAs render as chips: filled `text` when the latched leg is on,
+**Leg / input rows.** Label left, mono value right, then a zone gauge, then a
+12px caption that says what moving left or right does. The gauge is an 8px bar
+cut at the rule's thresholds into `lev-0` segments; the segment holding today's
+value is `lev-15` and its name below is `text` 600. Above the bar a mono pin
+shows today's value; below it, mono tick labels at both ends and at every cut,
+then one name per zone saying what happens there (`하락 레짐 / 직전 유지 /
+상승 레짐`). Zones follow the current state: Tripod's VIX gauge shows only the
+threshold of the current regime. Vol Target's realised vol has no rule
+threshold, so its cuts are where today's vote puts the raw target at 100% and
+50%; its weight gauge is cut at held ± band (`줄인다 / 유지 / 늘린다`). Vol
+Target's four MAs render as chips: filled `text` when the latched leg is on,
 outlined when off.
 
 **Timeline chart.**
 - Upper panel: NDX close on a log scale (`text`, 1.2px) and its 250-day MA
-  (`text-muted`, dashed 3/3). 18px of headroom top and bottom.
+  (`lev-15`, dotted 1.5/2.5). 18px of headroom top and bottom.
+- Tripod also overlays the ETFs it holds: TQQQ (`text-muted`, solid) and QLD
+  (`text-muted`, dashed 5/3). Prices that far apart cannot share an axis, so on
+  this chart every line is rebased to 100 on the window's first day (log scale,
+  labelled gridlines, 100 drawn in `line-strong`), NDX and its MA rebased
+  together. Lines are named by end labels in a 46px right gutter, not a legend;
+  `TQQQ / QLD` toggles sit next to the range control. QQQ is tooltip-only because
+  rebased it is indistinguishable from NDX.
 - Lower panel (44px): Vol Target weight as an `lev-15` area; Tripod gears as `lev-*`
   bands. A band is never drawn narrower than 2px, so a one-day gear is visible.
 - Change markers sit on the price line: ▲ in `buy` for an increase, ▼ in `sell`
@@ -231,8 +246,9 @@ outlined when off.
   still works) shows a dashed crosshair, a dot on the price, and a tooltip that flips
   sides near the right edge. Tooltip rows: date, NDX close, distance to the 250-day
   MA, then for Vol Target the TQQQ weight, vote (n/4), realised vol, raw target; for
-  Tripod the gear (`ko` label), VIX 10-day average, 52-week drawdown. Values come
-  from `signal.json` `series`.
+  Tripod the gear (`ko` label), VIX 10-day average, 52-week drawdown, then the
+  QQQ/QLD/TQQQ close with its move since the window start. Values come from
+  `signal.json` `series`.
 
 **Banners.** Stale data (`warning`) and failed run (`error`) sit above the ticket and
 state plainly that this is not a quiet day.
@@ -270,3 +286,5 @@ never an empty ticket.
 | 2026-10-05 | Leverage as ink density, red/blue reserved for buy/sell | Frees the semantic hues; the old red hero bar read as an alarm on quiet days. |
 | 2026-10-05 | No inverted ticket on order days; reference stays expanded | User declined both risks; order days are signalled by the verdict text and tinted order rows. |
 | 2026-10-05 | Chart hover tooltip, 3M/1Y/3Y range, coloured markers on the price line with a gap | User feedback on the preview: short changes were hard to read. |
+| 2026-10-05 | Input gauges cut into named zones at the rule's thresholds | Ticks alone did not say what left/right meant. |
+| 2026-10-05 | Tripod chart overlays TQQQ/QLD rebased to 100 | User wanted to see the held ETFs; rebasing is the only honest shared axis. Display only, no returns computed. |

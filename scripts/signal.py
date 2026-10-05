@@ -302,6 +302,27 @@ def ndx_series() -> tuple[list[str], list[float]]:
     return dates, [ndx[d] for d in dates]
 
 
+def attach_etf_closes(series: list[dict]) -> None:
+    """Add QQQ/QLD/TQQQ closes to the chart series as `q`/`l`/`t`.
+
+    Display only: the chart overlays them, no rule reads them (fetch.py,
+    write_etf_csv). A missing file or a missing day just leaves the key out,
+    which the chart draws as a gap. The provisional bar never has one.
+    """
+    path = os.path.join(DATA, "etf.csv")
+    if not os.path.exists(path):
+        return
+    with open(path, newline="", encoding="utf-8") as fh:
+        etf = {row["date"]: row for row in csv.DictReader(fh)}
+    for r in series:
+        row = etf.get(r["d"])
+        if not row:
+            continue
+        for sym, key in (("QQQ", "q"), ("QLD", "l"), ("TQQQ", "t")):
+            if row.get(sym):
+                r[key] = float(row[sym])
+
+
 def main() -> None:
     # --provisional decides on a live 15:45 ET quote instead of the settled close.
     # Worth ~8pp of max drawdown per unit of average leverage; see ADR 0005. If
@@ -330,6 +351,7 @@ def main() -> None:
     latest["provisional"] = prov_tp is not None
 
     series = [r for r in built["rows"] if r["g"] is not None][-SERIES_TRADING_DAYS:]
+    attach_etf_closes(series)
     tripod = {
         "params": PARAMS,
         "gears": GEARS,
