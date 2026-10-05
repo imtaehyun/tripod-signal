@@ -64,12 +64,19 @@ def send(text: str) -> None:
     print("telegram: sent")
 
 
-def _fill_line(prov: dict | None) -> str:
-    """One line saying which price the decision used and when to execute."""
+def _fill_line(prov: dict | None, acted: bool) -> str:
+    """One line saying which price the decision used and when to execute.
+
+    On a quiet day there is nothing to execute, so the line must not say "fill
+    now" — that sends someone hunting for an order that does not exist."""
     if not prov or not prov.get("usable"):
+        if not acted:
+            return "⏱ <b>마감 종가</b> 기준 · <b>주문 없음</b>"
         return ("⏱ <b>마감 종가</b> 기준 · 체결은 <b>다음 거래일</b>\n"
                 "   (지연 비용 MDD ~8pp/배수 · ADR 0005)")
     at = prov.get("taken_at_et", "?")[11:16]
+    if not acted:
+        return f"⏱ {at} ET 시세 기준 · <b>오늘 주문 없음</b>"
     if prov.get("same_session_fill"):
         return (f"⏱ <b>{at} ET</b> 시세 기준 · <b>지금 바로</b> 시장가로 체결 "
                 f"(MOC 마감 15:50)")
@@ -150,7 +157,7 @@ def build_ok() -> tuple[bool, str]:
     session = d["data_range"]["last_session"]
     if prov and prov.get("usable"):
         session = prov["quotes"]["^NDX"]["session"] + " (장중)"
-    head = f"📅 <b>{session}</b>\n{_fill_line(prov)}"
+    head = f"📅 <b>{session}</b>\n{_fill_line(prov, acted_vt or acted_tp)}"
     return (acted_vt or acted_tp,
             f"{head}\n\n{vt}\n\n{'─'*22}\n\n{tp}\n\n<a href=\"{PAGE}\">대시보드</a>")
 
