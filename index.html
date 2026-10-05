@@ -1,142 +1,242 @@
 <!doctype html>
-<html lang="ko" class="dark">
+<html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>나스닥 레버리지 시그널</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📐</text></svg>">
-<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<!-- Fonts and tokens: DESIGN.md. -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/wanteddev/wanted-sans@v1.0.3/packages/wanted-sans/fonts/webfonts/variable/split/WantedSansVariable.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 <!-- Sets window.__SIGNAL__. A script tag is exempt from CORS, so this is the
      path that works when the file is opened directly (file://), where fetch()
      is blocked. Failure here is silent and handled by the fetch fallback. -->
 <script src="data/signal.js" onerror="window.__SIGNAL_SCRIPT_FAILED__=1"></script>
 <style>
-  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
-  :root { color-scheme: dark; }
-  body { font-family: 'Pretendard Variable', -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
-  .tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+:root {
+  --ground: #F5F6F7; --surface: #FFFFFF; --ink: #111418; --muted: #5B6470;
+  --line: #DCE0E5; --line-strong: #C3C9D1;
+  --buy: #D6293B; --buy-tint: #FBEAEC; --sell: #1F5FD1; --sell-tint: #E8EFFB;
+  --warn: #B7791F; --warn-tint: #FBF1E1; --err: #B42318; --err-tint: #FCEBE9;
+  --lev-0: #E4E7EB; --lev-15: #8A939E; --lev-3: #2B3138;
+  --f-display: 'Wanted Sans Variable', 'Pretendard Variable', sans-serif;
+  --f-body: 'Pretendard Variable', sans-serif;
+  --f-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0F1216; --surface: #161A1F; --ink: #E8EBEE; --muted: #98A1AC;
+    --line: #262C33; --line-strong: #39414B;
+    --buy: #F2636F; --buy-tint: #3A1D22; --sell: #6B98F2; --sell-tint: #18253D;
+    --warn: #E0A84A; --warn-tint: #33270F; --err: #F07A6E; --err-tint: #3A1A17;
+    --lev-0: #232931; --lev-15: #6B7480; --lev-3: #D5DAE0;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--ground); color: var(--ink); font: 400 15px/1.55 var(--f-body); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+b, strong { font-weight: 600; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.muted { color: var(--muted); }
+.sm { font-size: 12px; }
+.nowrap { white-space: nowrap; }
+.buy { color: var(--buy); } .sell { color: var(--sell); }
+
+.page { max-width: 720px; margin: 0 auto; padding: 18px 20px 48px; }
+@media (min-width: 640px) { .page { padding: 32px 24px 64px; } }
+
+/* header + tabs */
+.top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.name { font-weight: 600; font-size: 15px; }
+.stamp { font-size: 12px; color: var(--muted); }
+.tabs { display: flex; gap: 20px; margin: 12px 0 16px; border-bottom: 1px solid var(--line); }
+.tab { position: relative; padding: 8px 0 10px; font-size: 15px; color: var(--muted); text-decoration: none; }
+.tab:hover { color: var(--ink); }
+.tab[aria-current] { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--ink); }
+.tab .dot { position: absolute; top: 8px; right: -9px; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
+.tab:focus-visible, button:focus-visible, a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 2px; }
+
+/* banners: a broken day must never look like a quiet day */
+.banner { padding: 12px 14px; border-radius: 8px; font-size: 14px; margin-bottom: 12px; }
+.banner.warn { background: var(--warn-tint); color: var(--warn); }
+.banner.err { background: var(--err-tint); color: var(--err); }
+
+/* ticket: the one container on the page */
+.ticket { background: var(--surface); border: 1px solid var(--line-strong); border-radius: 12px; padding: 22px 22px 18px; }
+.t-meta { font-size: 12px; color: var(--muted); }
+.verdict { font: 800 clamp(2.25rem, 1.9rem + 1.5vw, 2.75rem)/1.12 var(--f-display); letter-spacing: -0.025em; margin: 6px 0 14px; }
+.book { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.t-sub { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.t-sub b { color: var(--ink); }
+.orders { list-style: none; display: grid; gap: 6px; }
+.ord { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; padding: 11px 12px; border-radius: 6px; font-size: 17px; }
+.ord .n { font-size: 13px; color: var(--muted); }
+.ord .tk, .ord .sd { font-weight: 700; }
+.ord .amt { font-weight: 600; min-width: 52px; text-align: right; }
+.ord.buy { background: var(--buy-tint); color: var(--ink); } .ord.buy .sd, .ord.buy .amt { color: var(--buy); }
+.ord.sell { background: var(--sell-tint); color: var(--ink); } .ord.sell .sd, .ord.sell .amt { color: var(--sell); }
+.keep { margin-top: 8px; font-size: 13px; color: var(--muted); }
+
+/* sections: hairlines, not cards */
+.sec { padding-top: 22px; }
+.sec + .sec { border-top: 1px solid var(--line); margin-top: 22px; }
+.sec h2 { font-size: 18px; font-weight: 600; line-height: 1.3; margin-bottom: 12px; }
+.sec.ref h2 { font-size: 15px; color: var(--muted); }
+.row { padding: 10px 0; }
+.row + .row { border-top: 1px dashed var(--line); }
+.row-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.row-h .v { font-weight: 600; text-align: right; }
+.state { font-size: 12px; color: var(--muted); margin-left: 6px; }
+.state.on { color: var(--ink); font-weight: 600; }
+.cap { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+/* zone gauge: the bar is cut at the rule's thresholds, each segment says what
+   happens there, and the segment holding today's value is filled */
+.gz { position: relative; margin-top: 30px; }
+.gz-now { position: absolute; bottom: 100%; margin-bottom: 4px; transform: translateX(-50%); font: 600 11px/1 var(--f-mono); white-space: nowrap; }
+.gz-now::after { content: ''; position: absolute; left: 50%; top: 100%; width: 2px; height: 14px; margin-left: -1px; background: var(--ink); }
+.gz-now.l { transform: none; } .gz-now.l::after { left: 1px; }
+.gz-now.r { transform: translateX(-100%); } .gz-now.r::after { left: calc(100% - 1px); }
+.gz-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; }
+.gz-seg { background: var(--lev-0); }
+.gz-seg + .gz-seg { box-shadow: inset 2px 0 0 var(--ground); }
+.gz-seg.on { background: var(--lev-15); }
+.gz-ticks { position: relative; height: 16px; font: 11px/16px var(--f-mono); color: var(--muted); }
+.gz-ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.gz-ticks .lo { left: 0; transform: none; } .gz-ticks .hi { right: 0; transform: none; }
+.gz-names { display: flex; font-size: 12px; line-height: 1.35; color: var(--muted); }
+.gz-names span { text-align: center; padding: 0 2px; min-width: 0; word-break: keep-all; }
+.gz-names span.on { color: var(--ink); font-weight: 600; }
+.legs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.leg { font: 500 12px var(--f-mono); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--line-strong); color: var(--muted); }
+.leg.on { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+
+/* timeline chart */
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+.seg button { font: 500 12px var(--f-body); color: var(--muted); background: transparent; border: 0; padding: 5px 10px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button.on { background: var(--ink); color: var(--surface); }
+.cbox { position: relative; }
+.plot { touch-action: pan-y; cursor: crosshair; min-height: 220px; }
+.chart { display: block; overflow: visible; }
+.chart .px { fill: none; stroke: var(--ink); stroke-width: 1.2; stroke-linejoin: round; }
+.chart .ma { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .base { stroke: var(--line-strong); }
+.chart .axis { font: 10px var(--f-mono); fill: var(--muted); }
+.chart .mk.up { fill: var(--buy); } .chart .mk.dn { fill: var(--sell); }
+.chart .mk.lat { fill: var(--surface); stroke: var(--ink); stroke-width: 1; }
+.chart .xl { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 2 2; }
+.chart .xd { fill: var(--ink); stroke: var(--surface); stroke-width: 2; }
+.tip { position: absolute; top: 40px; min-width: 176px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line-strong);
+  border-radius: 8px; box-shadow: 0 6px 18px -8px rgba(17, 20, 24, .3); font-size: 12px; pointer-events: none; z-index: 2; }
+.tt-d { font-weight: 600; margin-bottom: 6px; }
+.tt-r { display: flex; justify-content: space-between; gap: 14px; color: var(--muted); line-height: 1.7; }
+.tt-r b { color: var(--ink); }
+.tt-k { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; box-shadow: inset 0 0 0 1px var(--line); }
+.hatch { background: repeating-linear-gradient(45deg, var(--lev-15) 0 2px, var(--lev-0) 2px 4px); }
+
+/* history: two-line rows, never a clipped table */
+.hlist { list-style: none; }
+.hist { display: grid; gap: 2px; padding: 9px 0; border-top: 1px solid var(--line); }
+.hist:first-child { border-top: 0; }
+.hist-d { font-size: 13px; }
+.hist-c { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+.hist-c .what { font-size: 12px; color: var(--muted); margin-left: 6px; }
+.hist.lat { opacity: .6; }
+.side { font-weight: 600; font-size: 13px; white-space: nowrap; }
+
+/* reference */
+.kv { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; font-size: 13px; }
+@media (min-width: 640px) { .kv.two { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto; column-gap: 24px; } }
+.kv dt { color: var(--muted); } .kv dd { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.prose { font-size: 13px; color: var(--muted); display: grid; gap: 10px; max-width: 64ch; }
+.prose b { color: var(--ink); }
+.vrow { padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.vrow:first-child { border-top: 0; }
+.vrow .row-h .v { font-weight: 600; font-size: 12px; }
+.math .row-h { font-size: 13px; padding: 6px 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.math .row-h span:last-child { margin-left: auto; text-align: right; }
+.math .row-h:first-child { border-top: 0; }
+.math .row-h span:first-child { color: var(--muted); }
+.foot { margin-top: 36px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); display: grid; gap: 8px; }
+.foot b { color: var(--ink); }
+.foot a { text-underline-offset: 2px; }
 </style>
 </head>
-<body class="bg-slate-950 text-slate-200 antialiased">
+<body>
 
-<div id="app" class="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-10">
-  <p class="text-sm text-slate-500">불러오는 중…</p>
+<div id="app" class="page">
+  <p class="muted sm">불러오는 중…</p>
 </div>
 
 <!-- ══ shell: header + nav, shared by every strategy ══════════════════════ -->
 <template id="tpl-shell">
-<header class="mb-5">
-  <div class="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-    <h1 class="text-lg font-semibold tracking-tight text-slate-100">
-      나스닥 레버리지 시그널
-      <span class="ml-1 text-sm font-normal text-slate-500">오늘 매매해야 하나</span>
-    </h1>
-    <p class="tnum text-xs text-slate-500" data-slot="stamp"></p>
+<header>
+  <div class="top">
+    <h1 class="name">나스닥 레버리지 시그널</h1>
+    <p class="stamp mono" data-slot="stamp"></p>
   </div>
-  <nav class="flex gap-1 border-b border-slate-800" data-slot="nav" aria-label="전략"></nav>
+  <nav class="tabs" data-slot="nav" aria-label="전략"></nav>
 </header>
+<div data-slot="banner"></div>
 <div data-slot="body"></div>
 
-<footer class="mt-8 space-y-2 border-t border-slate-800 pt-5 text-xs leading-relaxed text-slate-500">
+<footer class="foot">
   <p>
-    <strong class="text-slate-400">투자 권유가 아니다.</strong>
-    개인 기록·자동 계산용 도구다. <strong class="text-slate-400">트라이팟</strong>의 규칙은
-    <a class="text-slate-400 underline decoration-slate-700 underline-offset-2 hover:text-slate-200"
-       href="https://www.youtube.com/watch?v=lLdRKcBSKDM" target="_blank" rel="noopener">송팀장 채널 영상(2026-09-01)</a>,
-    <strong class="text-slate-400">변동성 타겟</strong>의 추세 신호는
-    <a class="text-slate-400 underline decoration-slate-700 underline-offset-2 hover:text-slate-200"
-       href="https://www.youtube.com/watch?v=xoerEBGf5ZA" target="_blank" rel="noopener">Mallik(@RealTQQQTrader)이 공개한 규칙</a>에서
+    <b>투자 권유가 아니다.</b>
+    개인 기록·자동 계산용 도구다. <b>트라이팟</b>의 규칙은
+    <a href="https://www.youtube.com/watch?v=lLdRKcBSKDM" target="_blank" rel="noopener">송팀장 채널 영상(2026-09-01)</a>,
+    <b>변동성 타겟</b>의 추세 신호는
+    <a href="https://www.youtube.com/watch?v=xoerEBGf5ZA" target="_blank" rel="noopener">Mallik(@RealTQQQTrader)이 공개한 규칙</a>에서
     왔고 사이징은 내가 붙였다. 두 원저자와 무관한 독립 재구현이다.
   </p>
   <p>
     데이터: 나스닥100 종가(Yahoo Finance), VIX 종가(CBOE 공식).
-    레버리지 ETF의 차입비용·경비율은 <strong class="text-slate-400">모델링하지 않았다</strong> — 이 페이지는 수익률을 계산하지 않는다.
+    레버리지 ETF의 차입비용·경비율은 <b>모델링하지 않았다</b> — 이 페이지는 수익률을 계산하지 않는다.
     과거는 미래를 보장하지 않는다.
   </p>
+  <p class="mono" data-slot="generated"></p>
 </footer>
 </template>
 
 <!-- ══ tab 1: tripod ══════════════════════════════════════════════════════ -->
 <template id="tpl-tripod">
-<section class="mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
-  <div class="h-1 w-full" data-slot="gearbar"></div>
-  <div class="grid gap-6 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-7">
-    <div class="min-w-0">
-      <p class="mb-2 text-xs font-medium uppercase tracking-widest" data-slot="verdict-kicker"></p>
-      <p class="mb-3 text-2xl font-bold leading-tight text-slate-50 sm:text-3xl" data-slot="verdict"></p>
-      <p class="text-sm leading-relaxed text-slate-400" data-slot="verdict-sub"></p>
-    </div>
-    <div class="min-w-0 sm:text-right">
-      <p class="mb-1 text-xs uppercase tracking-widest text-slate-500">목표 배분</p>
-      <p class="mb-1 text-xl font-bold tnum" data-slot="alloc"></p>
-      <p class="tnum text-sm text-slate-400" data-slot="lev"></p>
-      <p class="mt-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
-         data-slot="regime-chip"></p>
-    </div>
-  </div>
+<section class="ticket" data-slot="ticket"></section>
+
+<section class="sec">
+  <h2>세 다리 <span class="muted sm">하나라도 빠지면 넘어진다</span></h2>
+  <div data-slot="legs"></div>
 </section>
 
-<p class="mb-2 px-1 text-xs uppercase tracking-widest text-slate-500">
-  트라이팟 — 다리 하나가 빠지면 넘어진다
-</p>
-<section class="mb-6 grid gap-3 sm:grid-cols-3" data-slot="legs"></section>
-
-<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
-  <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-    <h2 class="text-sm font-semibold text-slate-200">기어 타임라인 <span class="font-normal text-slate-500">최근 3년</span></h2>
-    <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400" data-slot="legend"></div>
-  </div>
-  <div class="relative h-56 w-full overflow-hidden sm:h-72" data-slot="chart"></div>
-  <div class="relative mt-1 h-4 w-full" data-slot="xaxis"></div>
-  <p class="mt-1 text-xs text-slate-500">
-    배경색 = 그날의 기어 · 흰 선 = 나스닥100 종가(로그 스케일) · 점선 = 250일 이동평균
-  </p>
+<section class="sec">
+  <h2>기어 타임라인</h2>
+  <div data-slot="chart"></div>
+  <div class="legend" data-slot="legend"></div>
+  <p class="cap">위: 나스닥100 종가(로그)와 250일선(점선) · 아래: 그날의 기어 · 그래프를 누르고 좌우로 끌면 그날 값</p>
 </section>
 
-<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
-  <h2 class="mb-1 text-sm font-semibold text-slate-200">최근 기어 변경</h2>
-  <p class="mb-3 text-xs text-slate-500">판정일 종가 기준 → 체결은 다음 거래일</p>
-  <div class="-mx-1 overflow-x-auto">
-    <table class="w-full min-w-[26rem] border-collapse text-sm">
-      <thead>
-        <tr class="border-b border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500">
-          <th class="py-2 pr-3 font-medium">판정일</th>
-          <th class="py-2 pr-3 font-medium">체결일</th>
-          <th class="py-2 pr-3 font-medium">변경</th>
-          <th class="py-2 pr-1 font-medium">방향</th>
-        </tr>
-      </thead>
-      <tbody data-slot="events"></tbody>
-    </table>
-  </div>
+<section class="sec">
+  <h2>최근 기어 변경</h2>
+  <p class="cap" style="margin:-6px 0 8px">판정일 → 체결일. 체결은 판정 다음 거래일</p>
+  <ul class="hlist" data-slot="events"></ul>
 </section>
 
-<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
-  <h2 class="mb-1 text-sm font-semibold text-slate-200">재현 검증</h2>
-  <p class="mb-3 text-xs leading-relaxed text-slate-500">
-    이 구현이 원 영상의 수치를 재현하는지 대조한 것. 파라미터 추론이 맞았는지를 판단하는 근거.
-  </p>
-  <div class="-mx-1 overflow-x-auto">
-    <table class="w-full min-w-[30rem] border-collapse text-sm">
-      <thead>
-        <tr class="border-b border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500">
-          <th class="py-2 pr-3 font-medium">지표</th>
-          <th class="py-2 pr-3 font-medium">영상</th>
-          <th class="py-2 pr-3 font-medium">이 구현</th>
-          <th class="py-2 pr-1 font-medium"></th>
-        </tr>
-      </thead>
-      <tbody data-slot="validation"></tbody>
-    </table>
-  </div>
+<section class="sec ref">
+  <h2>재현 검증</h2>
+  <p class="cap" style="margin:-6px 0 8px">이 구현이 원 영상의 수치를 재현하는지 대조한 것. 파라미터 추론이 맞았는지를 판단하는 근거.</p>
+  <div data-slot="validation"></div>
+  <div class="prose" style="margin-top:12px" data-slot="validation-note"></div>
 </section>
 
-<section class="mb-2 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
-  <h2 class="mb-3 text-sm font-semibold text-slate-200">파라미터</h2>
-  <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" data-slot="params"></dl>
-  <p class="mt-4 border-t border-slate-800 pt-3 text-xs leading-relaxed text-slate-500">
-    <span class="font-semibold text-amber-500/90">†</span>
-    표시된 항목은 원 영상이 명시하지 않아 <strong class="text-slate-400">추론으로 확정한 값</strong>이다.
+<section class="sec ref">
+  <h2>파라미터</h2>
+  <dl class="kv two" data-slot="params"></dl>
+  <p class="cap" style="margin-top:12px">
+    † 표시된 항목은 원 영상이 명시하지 않아 <b>추론으로 확정한 값</b>이다.
     52주 낙폭을 장중 고점 기준으로 바꾸면 낙폭이 더 크게 잡혀 감속이 잦아진다.
     VIX 문턱 28은 원 저자 본인이 “최적값이 아니라 내가 감당하기로 정한 위험의 크기”라고 밝힌 튜닝 지점이다.
   </p>
@@ -145,79 +245,42 @@
 
 <!-- ══ tab 2: vol target ══════════════════════════════════════════════════ -->
 <template id="tpl-voltarget">
-<section class="mb-4 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
-  <div class="h-1 w-full" data-slot="bar"></div>
-  <div class="grid gap-6 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:p-7">
-    <div class="min-w-0">
-      <p class="mb-2 text-xs font-medium uppercase tracking-widest" data-slot="verdict-kicker"></p>
-      <p class="mb-3 text-2xl font-bold leading-tight text-slate-50 sm:text-3xl" data-slot="verdict"></p>
-      <p class="text-sm leading-relaxed text-slate-400" data-slot="verdict-sub"></p>
-    </div>
-    <div class="min-w-0 sm:text-right">
-      <p class="mb-1 text-xs uppercase tracking-widest text-slate-500">목표 배분</p>
-      <p class="mb-1 text-xl font-bold tnum" data-slot="alloc"></p>
-      <p class="tnum text-sm text-slate-400" data-slot="lev"></p>
-      <p class="mt-1 text-xs text-slate-400 hidden" data-slot="provisional"></p>
-      <p class="mt-3 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
-         data-slot="band-chip"></p>
-    </div>
-  </div>
+<section class="ticket" data-slot="ticket"></section>
+
+<section class="sec">
+  <h2>왜 이렇게 나왔나 <span class="muted sm">비중 = 추세 ÷ 변동성</span></h2>
+  <div data-slot="inputs"></div>
 </section>
 
-<p class="mb-2 px-1 text-xs uppercase tracking-widest text-slate-500">
-  비중은 추세 ÷ 변동성으로 결정된다
-</p>
-<section class="mb-4 grid gap-3 sm:grid-cols-3" data-slot="inputs"></section>
+<section class="sec">
+  <h2>비중 타임라인</h2>
+  <div data-slot="chart"></div>
+  <div class="legend" data-slot="legend"></div>
+  <p class="cap">위: 나스닥100 종가(로그)와 250일선(점선) · 아래: 그날의 TQQQ 목표 비중 0–100% · 그래프를 누르고 좌우로 끌면 그날 값</p>
+</section>
+
+<section class="sec">
+  <h2>최근 비중 변경</h2>
+  <p class="cap" style="margin:-6px 0 8px" data-slot="exec-note">판정일 → 체결일. 체결은 판정 다음 거래일</p>
+  <ul class="hlist" data-slot="events"></ul>
+</section>
 
 <!-- the arithmetic, spelled out, because a continuous weight is otherwise opaque -->
-<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
-  <h2 class="mb-3 text-sm font-semibold text-slate-200">오늘의 계산</h2>
-  <div class="-mx-1 overflow-x-auto">
-    <div class="tnum min-w-[24rem] text-sm leading-relaxed" data-slot="math"></div>
-  </div>
+<section class="sec ref">
+  <h2>오늘의 계산</h2>
+  <div class="math" data-slot="math"></div>
 </section>
 
-<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
-  <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-    <h2 class="text-sm font-semibold text-slate-200">비중 타임라인 <span class="font-normal text-slate-500">최근 3년</span></h2>
-    <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400" data-slot="legend"></div>
-  </div>
-  <div class="relative h-56 w-full overflow-hidden sm:h-72" data-slot="chart"></div>
-  <div class="relative mt-1 h-4 w-full" data-slot="xaxis"></div>
-  <p class="mt-1 text-xs text-slate-500">
-    위 = 나스닥100 종가(로그 스케일)와 250일 이동평균(점선) · 아래 = 그날의 TQQQ 목표 비중(0–100%)
-  </p>
+<section class="sec ref">
+  <h2>트라이팟과 다른 점</h2>
+  <div class="prose" data-slot="tradeoff"></div>
 </section>
 
-<section class="mb-6 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:p-5">
-  <h2 class="mb-1 text-sm font-semibold text-slate-200">최근 비중 변경</h2>
-  <p class="mb-3 text-xs text-slate-500" data-slot="exec-note">판정일 종가 기준 → 체결은 다음 거래일</p>
-  <div class="-mx-1 overflow-x-auto">
-    <table class="w-full min-w-[26rem] border-collapse text-sm">
-      <thead>
-        <tr class="border-b border-slate-800 text-left text-xs uppercase tracking-wider text-slate-500">
-          <th class="py-2 pr-3 font-medium">판정일</th>
-          <th class="py-2 pr-3 font-medium">체결일</th>
-          <th class="py-2 pr-3 font-medium">변경</th>
-          <th class="py-2 pr-1 font-medium">주문</th>
-        </tr>
-      </thead>
-      <tbody data-slot="events"></tbody>
-    </table>
-  </div>
-</section>
-
-<section class="mb-6 rounded-2xl border border-amber-900/50 bg-amber-950/20 p-4 sm:p-5">
-  <h2 class="mb-2 text-sm font-semibold text-amber-200/90">트라이팟과 다른 점</h2>
-  <div class="space-y-2 text-xs leading-relaxed text-amber-100/60" data-slot="tradeoff"></div>
-</section>
-
-<section class="mb-2 rounded-2xl border border-slate-800 bg-slate-900/40 p-4 sm:p-5">
-  <h2 class="mb-3 text-sm font-semibold text-slate-200">파라미터</h2>
-  <dl class="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2" data-slot="params"></dl>
-  <p class="mt-4 border-t border-slate-800 pt-3 text-xs leading-relaxed text-slate-500">
-    <span class="font-semibold text-amber-500/90">†</span>
-    <strong class="text-slate-400">목표 변동성</strong>이 이 전략의 유일한 손잡이다.
+<section class="sec ref">
+  <h2>파라미터</h2>
+  <dl class="kv two" data-slot="params"></dl>
+  <p class="cap" style="margin-top:12px">
+    † <b>목표 변동성</b>이 이 전략의 유일한 손잡이다.
     최적값이 아니라 감당하기로 정한 위험의 크기이며, 올리면 수익과 낙폭이 같이 커진다
     (트라이팟의 VIX 28과 같은 성격의 값이다). 나머지는 백테스트 숫자를 좋게 만들려고 건드릴 값이 아니다.
   </p>
@@ -227,7 +290,8 @@
 <script type="module">
 const $ = (root, slot) => root.querySelector(`[data-slot="${slot}"]`);
 const fmt = new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 });
-const pct = (v, digits = 2) => `${v > 0 ? '+' : ''}${v.toFixed(digits)}%`;
+const num = (x, d = 0) => x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (v, digits = 2) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(digits)}%`;
 
 /* Korean particle 로/으로: 로 after a vowel-final syllable or a ㄹ coda,
    으로 otherwise. "1.5배로" but "현금으로". */
@@ -241,292 +305,296 @@ const ro = word => {
 const app = document.getElementById('app');
 
 function fail(message) {
-  app.innerHTML = `<div class="rounded-2xl border border-rose-900/60 bg-rose-950/30 p-5">
-    <p class="mb-1 text-sm font-semibold text-rose-300">시그널을 불러올 수 없다</p>
-    <p class="text-xs text-rose-200/70">${message}</p></div>`;
+  app.innerHTML = `<div class="banner err"><b>시그널을 불러올 수 없다.</b> 조용한 날이 아니다.
+    <div class="sm" style="margin-top:4px">${message}</div></div>`;
 }
 
-/* ── shared chart scaffolding ─────────────────────────────────────
-   The SVG stretches to the container with preserveAspectRatio="none" so the
-   chart is legibly tall on a phone; strokes are non-scaling and every label is
-   HTML positioned in percent, so nothing gets distorted by the stretch.
-
-   `priceRatio` reserves the bottom of the plot for a second panel: Tripod uses
-   the whole height, Vol Target gives the lower quarter to its weight track. */
-function scaffold(pts, priceRatio = 1) {
-  const W = 1000, H = 300;
-  const PH = H * priceRatio;
-  const all = pts.flatMap(r => [r.c, r.ma250 ?? r.ma]).filter(Boolean);
-  const lo = Math.log(Math.min(...all) * 0.97);
-  const hi = Math.log(Math.max(...all) * 1.03);
-  const x = i => (i / (pts.length - 1)) * W;
-  const y = v => (1 - (Math.log(v) - lo) / (hi - lo)) * PH;
-  const yPct = v => ((1 - (Math.log(v) - lo) / (hi - lo)) * PH / H) * 100;
-
-  const yTicks = [];
-  const rawLo = Math.exp(lo), rawHi = Math.exp(hi);
-  const step = Math.pow(10, Math.floor(Math.log10(rawHi - rawLo))) * (rawHi / rawLo > 2 ? 1 : 0.5);
-  for (let v = Math.ceil(rawLo / step) * step; v < rawHi; v += step) yTicks.push({ v, pct: yPct(v) });
-
-  const xTicks = [];
-  let lastYear = pts[0].d.slice(0, 4);
-  pts.forEach((r, i) => {
-    const yr = r.d.slice(0, 4);
-    if (yr !== lastYear) { xTicks.push({ text: yr, pct: (x(i) / W) * 100 }); lastYear = yr; }
-  });
-
-  return { W, H, PH, x, y, yTicks, xTicks };
+/* ── when to execute ───────────────────────────────────────────────
+   The provisional block is top-level in signal.json because it describes the
+   RUN (which price, taken when), not one strategy. ADR 0005. */
+function basis(L, prov) {
+  const live = L.provisional && prov && prov.usable;
+  const at = live ? (prov.taken_at_et || '').slice(11, 16) : '';
+  return {
+    live, at,
+    now: Boolean(live && prov.same_session_fill),
+    meta: live ? `${L.date} ${at} ET 장중 시세로 판정` : `${L.date} 종가로 판정`,
+    exec: live && prov.same_session_fill ? '<b>지금 바로</b> 시장가 · MOC 마감 15:50 ET'
+        : live ? '15:58 ET가 지났다 → <b>다음 거래일</b>에 체결'
+        : '<b>다음 거래일</b>에 체결',
+  };
 }
 
-const yLabels = (s, ticks) => ticks.map(t =>
-  `<span class="tnum pointer-events-none absolute left-1 -translate-y-1/2 bg-slate-900/70 px-1
-     text-[0.65rem] text-slate-500" style="top:${t.pct.toFixed(2)}%">${fmt.format(Math.round(t.v))}</span>`).join('');
+/* The verdict is order-based, never state-based (CONTEXT.md, action_required).
+   "오늘" only when the order really goes in today. */
+const verdict = (n, b) => `${b.now ? '오늘 ' : ''}${n ? `주문 ${n}건` : '주문 없음'}`;
 
-const xLabels = ticks => ticks.map(t =>
-  `<span class="tnum absolute -translate-x-1/2 text-[0.65rem] text-slate-500"
-     style="left:${t.pct.toFixed(2)}%">${t.text}</span>`).join('');
+const orderRows = rows => `<ol class="orders">${rows.map((r, i) =>
+  `<li class="ord ${r.side}"><span class="n mono">${i + 1}</span><span class="tk">${r.tk}</span>
+   <span class="sd">${r.side === 'buy' ? '매수' : '매도'}</span><span class="amt mono">${r.amt}</span></li>`).join('')}</ol>`;
 
-const grid = (s, ticks, xt) =>
-  ticks.map(t => `<line x1="0" y1="${s.y(t.v).toFixed(1)}" x2="${s.W}" y2="${s.y(t.v).toFixed(1)}"
-      stroke="#64748b" stroke-width="1" opacity="0.25" vector-effect="non-scaling-stroke"/>`).join('') +
-  xt.map(t => `<line x1="${(t.pct * s.W / 100).toFixed(1)}" y1="0"
-      x2="${(t.pct * s.W / 100).toFixed(1)}" y2="${s.H}" stroke="#94a3b8" stroke-width="1"
-      stroke-dasharray="3 5" opacity="0.45" vector-effect="non-scaling-stroke"/>`).join('');
-
-/* ── tripod chart: gear bands behind price ───────────────────────── */
-function tripodChart(series, gears) {
-  const pts = series.filter(r => r.c && r.ma);
-  if (pts.length < 2) return null;
-  const s = scaffold(pts, 1);
-
-  // Collapse consecutive same-gear sessions into one background rect.
-  const bands = [];
-  pts.forEach((r, i) => {
-    const prev = bands[bands.length - 1];
-    if (prev && prev.g === r.g) prev.end = i;
-    else bands.push({ g: r.g, start: i, end: i });
-  });
-
-  // 3x is the resting state (~70% of all sessions). Washing it at full strength
-  // buries the rarer gears, which are the ones worth spotting — so the default
-  // gear is drawn faint and the exceptions are drawn strong.
-  const OPACITY = { G3: 0.10, G15_UP: 0.34, G15_DOWN: 0.34, CASH: 0.34 };
-  const rects = bands.map(b => {
-    const x0 = s.x(b.start);
-    const x1 = b.end === pts.length - 1 ? s.x(b.end) : s.x(b.end + 1);
-    return `<rect x="${x0.toFixed(1)}" y="0" width="${Math.max(0.7, x1 - x0).toFixed(1)}"
-      height="${s.H}" fill="${gears[b.g].color}" opacity="${OPACITY[b.g]}"/>`;
-  }).join('');
-
-  const path = key => 'M' + pts.map((r, i) => `${s.x(i).toFixed(1)},${s.y(r[key]).toFixed(1)}`).join('L');
-
-  const svg = `<svg viewBox="0 0 ${s.W} ${s.H}" preserveAspectRatio="none"
-    class="absolute inset-0 h-full w-full" role="img" aria-label="최근 3년 기어 타임라인">
-    ${rects}${grid(s, s.yTicks, s.xTicks)}
-    <path d="${path('ma')}" fill="none" stroke="#94a3b8" stroke-width="1.5"
-      stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>
-    <path d="${path('c')}" fill="none" stroke="#f8fafc" stroke-width="1.75"
-      vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-  </svg>` + yLabels(s, s.yTicks);
-
-  return { svg, axis: xLabels(s.xTicks) };
-}
-
-/* ── vol target chart: price on top, weight step-area below ──────── */
-function weightChart(series, bands) {
-  const pts = series.filter(r => r.c && r.w !== null && r.w !== undefined)
-    .map(r => ({ ...r, ma250: r.ma?.['250'] }));
-  if (pts.length < 2) return null;
-  const s = scaffold(pts, 0.68);
-  const TOP = s.PH + 20;                 // where the weight panel starts
-  const BH = s.H - TOP;                  // its height
-  const wy = w => TOP + (1 - w) * BH;
-
-  // Weight is a step function — it holds until the deadband releases — so it is
-  // drawn as steps, not interpolated. Interpolating would imply daily drift the
-  // rule does not actually ask for.
-  let d = `M${s.x(0).toFixed(1)},${wy(pts[0].w).toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) {
-    d += `L${s.x(i).toFixed(1)},${wy(pts[i - 1].w).toFixed(1)}`;
-    d += `L${s.x(i).toFixed(1)},${wy(pts[i].w).toFixed(1)}`;
+/* ── stale data ────────────────────────────────────────────────────
+   A failed or skipped run leaves yesterday's numbers on screen looking exactly
+   like a quiet day. Count weekdays since the judgement up to the last weekday
+   before today (ET); one is a holiday at most, two means the pipeline stopped. */
+function staleBanner(judged) {
+  const etToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
+  if (judged >= etToday) return '';
+  let gap = 0;
+  for (let t = new Date(judged + 'T12:00:00Z'); ;) {
+    t.setUTCDate(t.getUTCDate() + 1);
+    const iso = t.toISOString().slice(0, 10);
+    if (iso >= etToday) break;
+    if (t.getUTCDay() % 6) gap++;
   }
-  const area = `${d}L${s.x(pts.length - 1).toFixed(1)},${(TOP + BH).toFixed(1)}L${s.x(0).toFixed(1)},${(TOP + BH).toFixed(1)}Z`;
-
-  const path = key => 'M' + pts.map((r, i) => `${s.x(i).toFixed(1)},${s.y(r[key]).toFixed(1)}`).join('L');
-  const hasMa = pts.every(p => p.ma250);
-
-  const gl = [0.5, 1].map(w =>
-    `<line x1="0" y1="${wy(w).toFixed(1)}" x2="${s.W}" y2="${wy(w).toFixed(1)}" stroke="#64748b"
-       stroke-width="1" opacity="0.3" stroke-dasharray="2 4" vector-effect="non-scaling-stroke"/>`).join('');
-
-  const svg = `<svg viewBox="0 0 ${s.W} ${s.H}" preserveAspectRatio="none"
-    class="absolute inset-0 h-full w-full" role="img" aria-label="최근 3년 목표 비중 타임라인">
-    ${grid(s, s.yTicks, s.xTicks)}
-    ${hasMa ? `<path d="${path('ma250')}" fill="none" stroke="#94a3b8" stroke-width="1.5"
-      stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>` : ''}
-    <path d="${path('c')}" fill="none" stroke="#f8fafc" stroke-width="1.75"
-      vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-    ${gl}
-    <path d="${area}" fill="#dc2626" opacity="0.22"/>
-    <path d="${d}" fill="none" stroke="#dc2626" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
-  </svg>` + yLabels(s, s.yTicks) +
-    [0, 0.5, 1].map(w => `<span class="tnum pointer-events-none absolute left-1 -translate-y-1/2
-      bg-slate-900/70 px-1 text-[0.65rem] text-slate-500"
-      style="top:${(wy(w) / s.H * 100).toFixed(2)}%">${(w * 100).toFixed(0)}%</span>`).join('');
-
-  return { svg, axis: xLabels(s.xTicks) };
+  if (gap < 2) return '';
+  return `<div class="banner warn"><b>데이터가 오래됐다.</b> 마지막 판정은 ${judged}이고,
+    그 뒤로 평일 ${gap}일이 지났다. 실행 로그를 확인하기 전에는 이 화면을 믿고 주문하지 마라.</div>`;
 }
 
-/* ── one gauge card, shared by both tabs ─────────────────────────── */
-function gauge({ title, why, value, unit, lo, hi, marks, cursor, ok, okLabel, badLabel, note }) {
-  const at = v => `${Math.max(0, Math.min(100, 100 * (v - lo) / (hi - lo))).toFixed(2)}%`;
-  const marker = m => `
-    <div class="absolute top-0 h-full w-px" style="left:${at(m.v)};background:${m.color}">
-      <span class="absolute -top-0.5 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full"
-        style="background:${m.color}"></span>
-    </div>`;
-  return `<div class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-    <div class="mb-0.5 flex items-baseline justify-between gap-2">
-      <h3 class="truncate text-xs font-semibold uppercase tracking-wider text-slate-400">${title}</h3>
-      <span class="shrink-0 text-xs ${ok ? 'text-emerald-400' : 'text-amber-400'}">${ok ? (okLabel ?? '통과') : (badLabel ?? '작동')}</span>
-    </div>
-    <p class="mb-2 truncate text-[0.7rem] text-slate-500">${why}</p>
-    <p class="tnum mb-3 text-2xl font-bold text-slate-50">${value}<span
-      class="ml-0.5 text-sm font-normal text-slate-500">${unit}</span></p>
-    <div class="relative mb-2 h-1.5 w-full rounded-full bg-slate-800">
-      ${marks.map(marker).join('')}
-      <div class="absolute -top-1 h-3.5 w-1 -translate-x-1/2 rounded-full bg-slate-100"
-        style="left:${at(cursor)}"></div>
-    </div>
-    <p class="tnum text-xs leading-relaxed text-slate-400">${note}</p>
+/* ── one input row: label, value, zone gauge, caption ────────────
+   `cuts` are the rule's thresholds inside [lo, hi]; `names` (one more than
+   cuts) say what happens in each zone. Cuts outside the range are dropped along
+   with the zone they would have bounded. */
+function zoneGauge({ lo, hi, cuts, names, cursor, now, unit = '', digits = 0, sign = false }) {
+  const at = v => 100 * (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo);
+  const edges = [lo, ...cuts, hi];
+  const zones = names.map((n, i) => ({ n, a: edges[i], b: edges[i + 1] }))
+    .map(z => ({ ...z, a: Math.max(lo, z.a), b: Math.min(hi, z.b) })).filter(z => z.b > z.a);
+  const here = zones.findIndex(z => cursor >= z.a && (cursor < z.b || z.b === hi)) ;
+  const lab = v => `${sign && v > 0 ? '+' : ''}${v.toFixed(digits).replace('-', '−')}${unit}`;
+  const pos = at(cursor), side = pos < 8 ? 'l' : pos > 92 ? 'r' : '';
+  return `<div class="gz">
+    <span class="gz-now ${side}" style="left:${pos.toFixed(2)}%">${now}</span>
+    <div class="gz-bar">${zones.map((z, i) =>
+      `<i class="gz-seg ${i === here ? 'on' : ''}" style="flex:0 0 ${(at(z.b) - at(z.a)).toFixed(2)}%"></i>`).join('')}</div>
+    <div class="gz-ticks"><span class="lo">${lab(lo)}</span>${zones.slice(1).map(z =>
+      `<span style="left:${at(z.a).toFixed(2)}%">${lab(z.a)}</span>`).join('')}<span class="hi">${lab(hi)}</span></div>
+    <div class="gz-names">${zones.map((z, i) =>
+      `<span class="${i === here ? 'on' : ''}" style="flex:0 0 ${(at(z.b) - at(z.a)).toFixed(2)}%">${z.n}</span>`).join('')}</div>
   </div>`;
 }
 
-const dash = (label, value, inferred) =>
-  `<div class="flex min-w-0 items-baseline justify-between gap-3 border-b border-slate-800/60 pb-1.5">
-    <dt class="truncate text-slate-400">${label}${inferred ? '<span class="text-amber-500/90"> †</span>' : ''}</dt>
-    <dd class="tnum shrink-0 font-medium text-slate-200">${value}</dd></div>`;
+function gaugeRow({ label, state, on, value, gauge = '', cap, extra = '' }) {
+  return `<div class="row">
+    <div class="row-h"><span>${label}${state ? `<span class="state ${on ? 'on' : ''}">${state}</span>` : ''}</span>
+      <span class="v mono">${value}</span></div>
+    ${extra}${gauge}
+    <p class="cap">${cap}</p></div>`;
+}
 
-/* ── tab 1 render ────────────────────────────────────────────────── */
-function renderTripod(st) {
-  const node = document.getElementById('tpl-tripod').content.cloneNode(true);
-  const L = st.latest, P = st.params, G = st.gears, S = st.stats;
-  const gear = G[L.gear];
+const kv = (label, value, inferred) => `<dt>${label}${inferred ? ' †' : ''}</dt><dd>${value}</dd>`;
+const shortExec = e => e.exec_date ? e.exec_date.slice(5) : '다음 거래일';
 
-  $(node, 'gearbar').style.background = gear.color;
+/* ── timeline chart ────────────────────────────────────────────────
+   Drawn after mount (it needs the real width), redrawn on resize and on range
+   change. Change markers sit on the price line, clear of its local envelope,
+   so a one-day blip is never invisible and the line is never covered. */
+const charts = [];
+const RANGES = [[63, '3개월'], [252, '1년'], [756, '3년']];
 
-  /* Three states, not two: a gear key can change while the book does not. */
-  const acted = L.action_required;
-  const regimeOnly = L.regime_only_change;
-  const o = L.orders;
-  const order = t => `<span class="tnum font-semibold text-slate-100">${t}</span>`;
+function chartBox(node, kind, series, gears) {
+  const box = document.createElement('div');
+  box.className = 'cbox';
+  box.innerHTML = `<div class="seg" role="group" aria-label="기간">${RANGES.map(([n, t]) =>
+      `<button type="button" data-r="${n}" class="${n === 252 ? 'on' : ''}">${t}</button>`).join('')}</div>
+    <div class="plot"></div><div class="tip" hidden></div>`;
+  const state = { box, kind, gears, range: 252,
+    pts: series.map(p => ({ ...p, m: typeof p.ma === 'object' ? p.ma?.['250'] : p.ma }))
+               .filter(p => p.c && p.m && (kind === 'tripod' ? p.g : p.w !== null && p.w !== undefined)) };
+  box.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+    state.range = +b.dataset.r;
+    box.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b));
+    drawChart(state);
+  });
+  $(node, 'chart').replaceChildren(box);
+  charts.push(state);
+}
 
-  $(node, 'verdict-kicker').textContent =
-    acted ? '리밸런싱 필요' : regimeOnly ? '상태만 변경' : '오늘 할 일';
-  $(node, 'verdict-kicker').style.color = acted ? gear.color : '#64748b';
-  $(node, 'verdict').textContent =
-    acted ? '아래 주문을 낸다' : regimeOnly ? '주문 없음 (상태만 바뀜)' : '아무것도 하지 않는다';
+function drawChart(st) {
+  const { box, kind, gears } = st;
+  const s = st.pts.slice(-st.range);
+  const plot = box.querySelector('.plot'), tip = box.querySelector('.tip');
+  const W = plot.clientWidth;
+  if (!W || s.length < 2) return;
+  const PH = 150, GAP = 10, WH = 44, AX = 16, PAD = 18;
+  const base = PH + GAP + WH, H = base + AX;
+  const vals = s.flatMap(p => [p.c, p.m]);
+  const lo = Math.log(Math.min(...vals)), hi = Math.log(Math.max(...vals));
+  const X = i => (i / (s.length - 1)) * W;
+  const Y = v => PAD + (1 - (Math.log(v) - lo) / (hi - lo)) * (PH - 2 * PAD);
+  const line = f => 'M' + s.map((p, i) => `${X(i).toFixed(1)},${Y(f(p)).toFixed(1)}`).join('L');
+  const lev = p => kind === 'voltarget' ? p.w : gears[p.g].leverage;
+  const hid = `hatch-${kind}`;
 
-  if (acted) {
-    $(node, 'verdict-sub').innerHTML = `
-      <span class="mb-2 block">
-        <strong class="text-slate-300">${G[L.prev_gear].label}</strong> →
-        <strong style="color:${gear.color}">${gear.label}</strong> ·
-        ${L.provisional && prov && prov.same_session_fill
-            ? '<strong class="text-amber-300">오늘 종가</strong>에 지금 체결한다.'
-            : '규칙상 <strong class="text-slate-300">다음 거래일</strong>에 체결한다.'}
-      </span>
-      <span class="block space-y-1">
-        ${o.sell.length ? `<span class="block">1. ${o.sell.map(order).join(', ')} <strong class="text-amber-400">전량 매도</strong></span>` : ''}
-        ${o.buy.length ? `<span class="block">${o.sell.length ? '2. 대금으로' : '1. 보유 현금으로'}
-          ${o.buy.map(t => `${order(t)} ${(gear.weights[t] * 100).toFixed(0)}%`).join(' + ')}
-          <strong class="text-emerald-400">매수</strong></span>` : ''}
-        ${o.keep.length ? `<span class="block text-slate-500">${o.keep.map(order).join(', ')} 는 그대로 보유</span>` : ''}
-      </span>`;
-  } else if (regimeOnly) {
-    $(node, 'verdict-sub').innerHTML =
-      `레짐이 <strong class="text-slate-300">${G[L.prev_gear].ko}</strong> →
-       <strong style="color:${gear.color}">${gear.ko}</strong>${ro(gear.ko)} 바뀌었지만
-       보유 종목은 <strong class="text-slate-300">${gear.label}</strong>로 동일하다.
-       <strong class="text-slate-300">낼 주문이 없다.</strong>
-       35년 백테스트에서 ${S.regime_only_changes}회 발생한 경우다.`;
+  let lower = '';
+  if (kind === 'voltarget') {
+    // A step function: the weight holds until the deadband releases, so it is
+    // never interpolated.
+    const wy = w => base - w * WH;
+    let d = `M0,${base}L0,${wy(s[0].w).toFixed(1)}`;
+    for (let i = 1; i < s.length; i++) d += `L${X(i).toFixed(1)},${wy(s[i - 1].w).toFixed(1)}L${X(i).toFixed(1)},${wy(s[i].w).toFixed(1)}`;
+    lower = `<path d="${d}L${W},${base}Z" fill="var(--lev-15)"/>`;
   } else {
-    $(node, 'verdict-sub').innerHTML =
-      `<strong class="text-slate-300">${L.days_since_change}일</strong>째
-       (${L.sessions_since_change} 거래일) 변경 없음.
-       이 규칙은 연평균 ${S.changes_per_year}회만 움직이고, 최장 ${S.longest_no_change_days}일 손대지 않은 구간도 있었다.`;
+    const fill = { G3: 'var(--lev-3)', G15_UP: 'var(--lev-15)', G15_DOWN: `url(#${hid})`, CASH: 'var(--lev-0)' };
+    for (let i = 0; i < s.length;) {
+      let j = i; while (j + 1 < s.length && s[j + 1].g === s[i].g) j++;
+      const x0 = X(i), x1 = j + 1 < s.length ? X(j + 1) : W;
+      lower += `<rect x="${x0.toFixed(1)}" y="${PH + GAP}" width="${Math.max(x1 - x0, 2).toFixed(1)}" height="${WH}" fill="${fill[s[i].g]}"/>`;
+      i = j + 1;
+    }
   }
 
-  $(node, 'alloc').textContent = gear.label;
-  $(node, 'alloc').style.color = gear.color;
-  $(node, 'lev').textContent = `계좌 배수 ${gear.leverage}x`;
+  let marks = '';
+  const span = Math.max(1, Math.round((5 / W) * (s.length - 1)));
+  for (let i = 1; i < s.length; i++) {
+    const a = lev(s[i - 1]), b = lev(s[i]);
+    if (a === b && (kind === 'voltarget' || s[i].g === s[i - 1].g)) continue;
+    let top = Infinity, bot = -Infinity;
+    for (let j = Math.max(0, i - span); j <= Math.min(s.length - 1, i + span); j++) {
+      const yy = Y(s[j].c); top = Math.min(top, yy); bot = Math.max(bot, yy);
+    }
+    const x = X(i).toFixed(1), G = 5;
+    marks += b > a ? `<path d="M${x},${(bot + G).toFixed(1)} l4.5,7 h-9 Z" class="mk up"/>`
+           : b < a ? `<path d="M${x},${(top - G).toFixed(1)} l4.5,-7 h-9 Z" class="mk dn"/>`
+           : `<path d="M${x},${(top - G - 7).toFixed(1)} l3.5,3.5 l-3.5,3.5 l-3.5,-3.5 Z" class="mk lat"/>`;
+  }
 
-  const chip = $(node, 'regime-chip');
-  chip.textContent = gear.ko;
-  chip.style.color = gear.color;
-  chip.style.borderColor = gear.color + '66';
-  chip.style.background = gear.color + '14';
+  let ax = '';
+  const short = st.range <= 63;
+  const key = d => short ? d.slice(0, 7) : d.slice(0, 4);
+  for (let i = 1; i < s.length; i++) if (key(s[i].d) !== key(s[i - 1].d)) {
+    const lbl = short ? `${+s[i].d.slice(5, 7)}월` : s[i].d.slice(0, 4);
+    ax += `<line x1="${X(i).toFixed(1)}" x2="${X(i).toFixed(1)}" y1="0" y2="${base}" class="grid"/>
+      <text x="${(X(i) + 3).toFixed(1)}" y="${base + 13}" class="axis">${lbl}</text>`;
+  }
+
+  plot.innerHTML = `<svg width="${W}" height="${H}" class="chart" role="img"
+      aria-label="나스닥100 종가와 ${kind === 'voltarget' ? 'TQQQ 비중' : '기어'} 타임라인">
+    <defs><pattern id="${hid}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="4" height="4" fill="var(--lev-0)"/><line x1="0" y1="0" x2="0" y2="4" stroke="var(--lev-15)" stroke-width="2"/></pattern></defs>
+    ${ax}<path d="${line(p => p.m)}" class="ma"/><path d="${line(p => p.c)}" class="px"/>${lower}${marks}
+    <line x1="0" x2="${W}" y1="${base}" y2="${base}" class="base"/>
+    <g class="xh" visibility="hidden"><line y1="0" y2="${base}" class="xl"/><circle r="3.5" class="xd"/></g></svg>`;
+
+  const xh = plot.querySelector('.xh'), xl = xh.querySelector('line'), xd = xh.querySelector('circle');
+  const show = ev => {
+    const r = plot.getBoundingClientRect();
+    const i = Math.max(0, Math.min(s.length - 1, Math.round(((ev.clientX - r.left) / W) * (s.length - 1))));
+    const p = s[i], x = X(i);
+    xl.setAttribute('x1', x); xl.setAttribute('x2', x);
+    xd.setAttribute('cx', x); xd.setAttribute('cy', Y(p.c));
+    xh.setAttribute('visibility', 'visible');
+    const rowf = (k, v, cls = '') => `<div class="tt-r ${cls}"><span>${k}</span><b class="mono">${v}</b></div>`;
+    tip.innerHTML = `<div class="tt-d mono">${p.d}${p.provisional ? ' 장중' : ''}</div>` +
+      rowf('NDX', num(p.c, 2)) + rowf('250일선 대비', pct((p.c / p.m - 1) * 100)) +
+      (kind === 'voltarget'
+        ? rowf('TQQQ 비중', `${num(p.w * 100)}%`, 'tt-k') + rowf('추세 투표', `${num(p.vote * 4)}/4`) +
+          rowf('실현변동성', `${num(p.rv * 100, 1)}%`) + rowf('원시 목표', `${num(p.raw * 100, 1)}%`)
+        : `<div class="tt-r tt-k"><span>기어</span><b>${gears[p.g].ko}</b></div>` +
+          rowf('VIX 10일', num(p.v, 2)) + rowf('52주 낙폭', pct(p.dd * 100)));
+    tip.hidden = false;
+    const tw = tip.offsetWidth;
+    tip.style.left = `${x + 12 + tw > W ? Math.max(0, x - 12 - tw) : x + 12}px`;
+  };
+  const hide = () => { xh.setAttribute('visibility', 'hidden'); tip.hidden = true; };
+  plot.onpointermove = show;
+  plot.onpointerdown = show;
+  plot.onpointerleave = hide;
+  plot.onpointerup = ev => { if (ev.pointerType !== 'mouse') hide(); };
+}
+
+/* ── tab 1 render ────────────────────────────────────────────────── */
+function renderTripod(st, root) {
+  const node = document.getElementById('tpl-tripod').content.cloneNode(true);
+  const L = st.latest, P = st.params, G = st.gears, S = st.stats;
+  const gear = G[L.gear], prev = G[L.prev_gear];
+  const b = basis(L, root.provisional);
+  const o = L.orders;
+
+  /* Three states, not two: a gear key can change while the book does not. */
+  const rows = L.action_required ? [
+    ...o.sell.map(t => ({ tk: t, side: 'sell', amt: '전량' })),
+    ...o.buy.map(t => ({ tk: t, side: 'buy', amt: `${(gear.weights[t] * 100).toFixed(0)}%` })),
+  ] : [];
+  $(node, 'ticket').innerHTML = `
+    <div class="t-meta">트라이팟 · ${b.meta}</div>
+    <div class="verdict">${verdict(rows.length, b)}</div>
+    ${L.action_required
+      ? `${orderRows(rows)}${o.keep.length ? `<p class="keep">${o.keep.join(', ')}는 그대로 보유</p>` : ''}
+         <div class="t-sub"><span class="mono">${prev.leverage}x → <b>${gear.leverage}x</b></span> · ${gear.ko} · ${b.exec}</div>`
+      : `<div class="book">${gear.label}</div>
+         <div class="t-sub">${L.regime_only_change
+           ? `레짐만 바뀌었다: ${prev.ko} → <b>${gear.ko}</b>${ro(gear.ko)}. 보유 종목이 같아 <b>낼 주문이 없다</b>
+              (35년 동안 ${S.regime_only_changes}회 있었던 경우).`
+           : `보유 유지 · ${gear.ko} · 계좌 배수 ${gear.leverage}x ·
+              <b>${L.days_since_change}일</b>째 그대로 (${L.sessions_since_change}거래일).
+              연평균 ${S.changes_per_year}회만 움직인다.`}</div>`}`;
 
   const ma = L.legs.ma, vx = L.legs.vix, dd = L.legs.dd;
+  const vixOk = L.regime === 'up' ? vx.value < P.vix_hot : vx.value < P.vix_panic;
+  const ddOk = dd.value / 100 >= P.dd_trigger;
+  const up = L.regime === 'up';
+  const upLine = P.up_band * 100, downLine = -P.down_band * 100;
   $(node, 'legs').innerHTML = [
-    gauge({
-      title: `250일선 · 방향`, why: '추세가 살아 있는가',
-      value: pct(ma.dist_pct), unit: '', lo: -0.15, hi: 0.15,
-      cursor: ma.dist_pct / 100,
-      marks: [{ v: P.up_band, color: '#dc2626' }, { v: -P.down_band, color: '#0ea5e9' }],
-      ok: L.regime === 'up',
-      note: `종가 ${fmt.format(L.close)} · MA ${fmt.format(ma.value)}<br>
-             전환까지 상승선 ${pct(ma.to_up_pct)} · 하락선 ${pct(ma.to_down_pct)}`,
+    gaugeRow({
+      label: `방향 <span class="muted sm">NDX vs ${P.ma_length}일선</span>`,
+      state: up ? '상승 레짐' : '하락 레짐', on: !up,
+      value: pct(ma.dist_pct),
+      gauge: zoneGauge({
+        lo: Math.min(-15, ma.dist_pct - 2), hi: Math.max(15, ma.dist_pct + 2),
+        cuts: [downLine, upLine], names: ['하락 레짐', '직전 유지', '상승 레짐'],
+        cursor: ma.dist_pct, now: pct(ma.dist_pct), unit: '%', sign: true,
+      }),
+      cap: `종가 ${fmt.format(L.close)} · ${P.ma_length}일선 ${fmt.format(ma.value)}. 종가가 이평선보다 ${upLine}% 넘게 위면 상승, ${-downLine}% 넘게 아래면 하락, 그 사이는 어제 레짐을 그대로 쓴다.`,
     }),
-    gauge({
-      title: `VIX ${P.vix_ma_length}일 평균 · 공포`, why: '지금 얼마나 무서워하는가',
-      value: fmt.format(vx.value), unit: '', lo: 8, hi: 45, cursor: vx.value,
-      marks: [{ v: P.vix_panic, color: '#0ea5e9' }, { v: P.vix_hot, color: '#dc2626' }],
-      ok: L.regime === 'up' ? vx.value < P.vix_hot : vx.value < P.vix_panic,
-      note: `28(감속)까지 ${vx.to_hot > 0 ? '+' : ''}${vx.to_hot} ·
-             18(현금 문턱)까지 ${vx.to_panic > 0 ? '+' : ''}${vx.to_panic}`,
+    gaugeRow({
+      label: `공포 <span class="muted sm">VIX ${P.vix_ma_length}일 평균</span>`,
+      state: vixOk ? '통과' : '작동', on: !vixOk,
+      value: fmt.format(vx.value),
+      gauge: up
+        ? zoneGauge({ lo: 8, hi: Math.max(45, vx.value + 5), cuts: [P.vix_hot], names: ['3배 유지', '1.5배로 감속'],
+                      cursor: vx.value, now: fmt.format(vx.value) })
+        : zoneGauge({ lo: 8, hi: Math.max(45, vx.value + 5), cuts: [P.vix_panic], names: ['1.5배', '전량 현금'],
+                      cursor: vx.value, now: fmt.format(vx.value) }),
+      cap: up
+        ? `상승 레짐이라 문턱은 ${P.vix_hot}. 지금보다 ${vx.to_hot > 0 ? '+' : ''}${vx.to_hot} 오르면 감속한다. (하락 레짐이면 문턱 ${P.vix_panic}에서 현금)`
+        : `하락 레짐이라 문턱은 ${P.vix_panic}. ${vx.to_panic > 0 ? `+${vx.to_panic} 오르면 현금으로 간다` : '이미 넘어서 현금이다'}. (상승 레짐이면 문턱 ${P.vix_hot}에서 감속)`,
     }),
-    gauge({
-      title: '52주 낙폭 · 피로도', why: '고점에서 얼마나 멀어졌는가',
-      value: dd.value.toFixed(2), unit: '%', lo: -0.25, hi: 0, cursor: dd.value / 100,
-      marks: [{ v: P.dd_trigger, color: '#dc2626' }],
-      ok: dd.value / 100 >= P.dd_trigger,
-      note: `52주 종가 고점 ${fmt.format(dd.peak)}<br>
-             ${dd.trigger}% 트리거까지 ${dd.to_trigger_pp.toFixed(2)}%p`,
+    gaugeRow({
+      label: '피로도 <span class="muted sm">52주 낙폭</span>',
+      state: !up ? '하락 레짐엔 안 씀' : ddOk ? '통과' : '작동', on: up && !ddOk,
+      value: `${dd.value.toFixed(2)}%`,
+      gauge: zoneGauge({
+        lo: Math.min(-25, dd.value - 3), hi: 0, cuts: [P.dd_trigger * 100],
+        names: [up ? '1.5배로 감속' : '감속 (상승 레짐일 때)', up ? '3배 유지' : '통과'],
+        cursor: dd.value, now: `${dd.value.toFixed(2)}%`, unit: '%',
+      }),
+      cap: `52주 종가 고점 ${fmt.format(dd.peak)}에서 얼마나 내려왔나. 오른쪽 끝 0%가 고점이다. ${dd.trigger}%보다 깊어지면 상승 레짐에서도 감속하고, 지금은 ${dd.to_trigger_pp.toFixed(2)}%p 남았다.`,
     }),
   ].join('');
 
-  const c = tripodChart(st.series, G);
-  if (c) { $(node, 'chart').innerHTML = c.svg; $(node, 'xaxis').innerHTML = c.axis; }
+  chartBox(node, 'tripod', st.series, G);
+  const sw = { G3: 'background:var(--lev-3)', G15_UP: 'background:var(--lev-15)', G15_DOWN: '', CASH: 'background:var(--lev-0)' };
   $(node, 'legend').innerHTML = Object.entries(G).map(([k, g]) =>
-    `<span class="inline-flex items-center gap-1.5 whitespace-nowrap">
-       <span class="h-2.5 w-2.5 rounded-sm" style="background:${g.color}"></span>
-       ${g.ko}<span class="tnum text-slate-600">${S.occupancy_pct[k] ?? 0}%</span>
-     </span>`).join('');
+    `<span class="nowrap"><i class="${k === 'G15_DOWN' ? 'hatch' : ''}" style="${sw[k]}"></i>${g.ko}
+       <span class="mono">${S.occupancy_pct[k] ?? 0}%</span></span>`).join('') +
+    `<span class="nowrap"><b class="buy">▲</b> 증속 <b class="sell">▼</b> 감속 ◇ 상태만 변경</span>`;
 
-  $(node, 'events').innerHTML = st.events.filter(e => e.from).slice(-12).reverse().map(e => {
+  $(node, 'events').innerHTML = st.events.filter(e => e.from).slice(-6).reverse().map(e => {
     const up = G[e.to].leverage > G[e.from].leverage;
-    const arrow = !e.trade ? '주문 없음' : up ? '↑ 증속' : '↓ 감속';
-    const tone = !e.trade ? 'text-slate-500' : up ? 'text-emerald-400' : 'text-amber-400';
     const what = e.trade
-      ? [e.sell.length ? `${e.sell.join('+')} 매도` : '', e.buy.length ? `${e.buy.join('+')} 매수` : '']
-          .filter(Boolean).join(' → ')
+      ? [e.sell.length ? `${e.sell.join('+')} 매도` : '', e.buy.length ? `${e.buy.join('+')} 매수` : ''].filter(Boolean).join(' → ')
       : '보유 종목 동일';
-    return `<tr class="border-b border-slate-800/60 last:border-0 ${e.trade ? '' : 'opacity-60'}">
-      <td class="tnum py-2 pr-3 text-slate-400">${e.date}</td>
-      <td class="tnum py-2 pr-3 text-slate-300">${e.exec_date
-        ?? '<span class="text-amber-400">다음 거래일</span>'}</td>
-      <td class="py-2 pr-3">
-        <span style="color:${G[e.from].color}">${G[e.from].leverage}x</span>
-        <span class="text-slate-600">→</span>
-        <span class="font-semibold" style="color:${G[e.to].color}">${G[e.to].leverage}x</span>
-        <span class="ml-1 text-xs text-slate-500">${what}</span>
-      </td>
-      <td class="py-2 pr-1 whitespace-nowrap text-xs ${tone}">${arrow}</td>
-    </tr>`;
+    const side = !e.trade ? '<span class="side muted">주문 없음</span>'
+      : up ? '<span class="side buy">▲ 증속</span>' : '<span class="side sell">▼ 감속</span>';
+    return `<li class="hist ${e.trade ? '' : 'lat'}">
+      <div class="hist-d mono">${e.date} <span class="muted">→ ${shortExec(e)}</span></div>
+      <div class="hist-c"><span><span class="mono">${G[e.from].leverage}x → <b>${G[e.to].leverage}x</b></span>
+        <span class="what">${what}</span></span>${side}</div></li>`;
   }).join('');
 
-  const rows = [
+  const v = [
     ['백테스트 기간', '35년', `${S.span_years}년`, true],
     ['연평균 매매 횟수', '8.1회', `${S.changes_per_year}회`, true],
     ['매매 간격 중앙값', '6일', `${S.median_gap_days}일`, true],
@@ -534,38 +602,31 @@ function renderTripod(st) {
     ['최장 무매매 기간', '2년 7개월', `${S.longest_no_change_days}일`, true],
     ['감속·현금화 횟수', '55회', `${S.downshifts}회`, false],
   ];
-  $(node, 'validation').innerHTML = rows.map(([k, a, b, match]) =>
-    `<tr class="border-b border-slate-800/60 last:border-0">
-      <td class="py-2 pr-3 text-slate-400">${k}</td>
-      <td class="tnum py-2 pr-3 text-slate-500">${a}</td>
-      <td class="tnum py-2 pr-3 font-medium text-slate-200">${b}</td>
-      <td class="py-2 pr-1 text-xs ${match ? 'text-emerald-400' : 'text-amber-400'}">
-        ${match ? '일치' : '불일치'}</td>
-    </tr>`).join('') +
-    `<tr><td colspan="4" class="pt-3 text-xs leading-relaxed text-slate-500">
-      매매 횟수는 <strong class="text-slate-400">실제 주문이 발생한 ${S.trade_events}회</strong> 기준이다.
+  $(node, 'validation').innerHTML = v.map(([k, a, mine, match]) => `<div class="vrow">
+    <div class="row-h"><span>${k}</span><span class="v">${match ? '일치' : '<span class="state on" style="margin:0">불일치</span>'}</span></div>
+    <div class="muted sm mono">영상 ${a} · 이 구현 <b style="color:var(--ink)">${mine}</b></div></div>`).join('');
+  $(node, 'validation-note').innerHTML = `
+    <p>매매 횟수는 <b>실제 주문이 발생한 ${S.trade_events}회</b> 기준이다.
       기어 키가 바뀐 것만 세면 ${S.gear_changes}회(연 8.07회)인데, 차이인 ${S.regime_only_changes}회는
-      1.5배(상승) ↔ 1.5배(하락) 전환으로 <strong class="text-slate-400">보유 종목이 같아 주문이 없다</strong>.
-      영상의 8.1회는 어느 쪽으로 세도 근사하므로 원 저자가 이 구분을 했는지는 알 수 없다.
-      <br><br>
-      감속 횟수만 불일치한다. 3배를 벗어난 구간은 127개 에피소드이고 그중 4일 이상 지속된 것이 약 55개다.
+      1.5배(상승) ↔ 1.5배(하락) 전환으로 <b>보유 종목이 같아 주문이 없다</b>.
+      영상의 8.1회는 어느 쪽으로 세도 근사하므로 원 저자가 이 구분을 했는지는 알 수 없다.</p>
+    <p>감속 횟수만 불일치한다. 3배를 벗어난 구간은 127개 에피소드이고 그중 4일 이상 지속된 것이 약 55개다.
       원 영상이 짧은 되돌림을 어떻게 병합했는지 밝히지 않아 미해결로 둔다.
-      나머지 5개 지표가 모두 일치하므로 파라미터 추론 자체는 맞다고 본다.
-    </td></tr>`;
+      나머지 5개 지표가 모두 일치하므로 파라미터 추론 자체는 맞다고 본다.</p>`;
 
   $(node, 'params').innerHTML = [
-    dash('기준 지수', '^NDX (나스닥100)', true),
-    dash('이동평균', `${P.ma_length}일 ${P.ma_kind.toUpperCase()}`, true),
-    dash('상승 밴드', `MA +${(P.up_band * 100).toFixed(0)}%`, false),
-    dash('하락 밴드', `MA −${(P.down_band * 100).toFixed(0)}%`, false),
-    dash('중립 구간', '직전 상태 유지', false),
-    dash('VIX 평균', `${P.vix_ma_length}일 SMA`, false),
-    dash('VIX 감속 문턱', `${P.vix_hot}`, false),
-    dash('VIX 현금 문턱', `${P.vix_panic}`, false),
-    dash('52주 낙폭 기준', `${P.dd_lookback}거래일 · ${P.dd_basis === 'close' ? '종가' : '장중'} 고점`, true),
-    dash('낙폭 트리거', `${(P.dd_trigger * 100).toFixed(0)}%`, false),
-    dash('체결', '판정 다음 거래일', false),
-    dash('VIX 결측 보정', `${S.vix_filled_sessions}거래일 전일값 사용`, false),
+    kv('기준 지수', '^NDX', true),
+    kv('이동평균', `${P.ma_length}일 ${P.ma_kind.toUpperCase()}`, true),
+    kv('상승 밴드', `MA +${(P.up_band * 100).toFixed(0)}%`),
+    kv('하락 밴드', `MA −${(P.down_band * 100).toFixed(0)}%`),
+    kv('중립 구간', '직전 상태 유지'),
+    kv('VIX 평균', `${P.vix_ma_length}일 SMA`),
+    kv('VIX 감속 문턱', `${P.vix_hot}`),
+    kv('VIX 현금 문턱', `${P.vix_panic}`),
+    kv('52주 낙폭 기준', `${P.dd_lookback}거래일 · ${P.dd_basis === 'close' ? '종가' : '장중'} 고점`, true),
+    kv('낙폭 트리거', `${(P.dd_trigger * 100).toFixed(0)}%`),
+    kv('체결', '판정 다음 거래일'),
+    kv('VIX 결측 보정', `${S.vix_filled_sessions}거래일 전일값`),
   ].join('');
 
   return node;
@@ -573,221 +634,157 @@ function renderTripod(st) {
 
 /* ── tab 2 render ────────────────────────────────────────────────── */
 function renderVolTarget(st, tripodStats, root) {
-  // `root` is the whole payload: the provisional block is top-level because it
-  // describes the RUN (which price, taken when), not one strategy.
   const cashTicker = st.cash_ticker || 'SGOV';
-  const prov = (root && root.provisional) || null;
   const node = document.getElementById('tpl-voltarget').content.cloneNode(true);
   const L = st.latest, P = st.params, S = st.stats, I = L.inputs;
-
-  $(node, 'bar').style.background = L.color;
-
+  const b = basis(L, root.provisional);
   const acted = L.action_required;
-  $(node, 'verdict-kicker').textContent = acted ? '리밸런싱 필요' : '오늘 할 일';
-  $(node, 'verdict-kicker').style.color = acted ? L.color : '#64748b';
-  $(node, 'verdict').textContent = acted ? '아래 주문을 낸다' : '아무것도 하지 않는다';
+  const heldBefore = 100 * L.prev_weight;
+  const pp = `${Math.abs(L.delta_pp).toFixed(0)}%p`;
+  const buying = L.side === 'buy';
 
-  if (acted) {
-    const buying = L.side === 'buy';
-    $(node, 'verdict-sub').innerHTML = `
-      <span class="mb-2 block">
-        TQQQ <strong class="text-slate-300">${(L.prev_weight * 100).toFixed(0)}%</strong> →
-        <strong style="color:${L.color}">${L.weight_pct.toFixed(0)}%</strong> ·
-        ${L.provisional && prov && prov.same_session_fill
-            ? '<strong class="text-amber-300">오늘 종가</strong>에 지금 체결한다.'
-            : '규칙상 <strong class="text-slate-300">다음 거래일</strong>에 체결한다.'}
-      </span>
-      <span class="block">
-        계좌의 <strong class="tnum ${buying ? 'text-emerald-400' : 'text-amber-400'}">${Math.abs(L.delta_pp).toFixed(0)}%p</strong>
-        만큼 <span class="tnum font-semibold text-slate-100">TQQQ</span>
-        <strong class="${buying ? 'text-emerald-400' : 'text-amber-400'}">${buying ? '추가 매수' : '매도'}</strong>
-        → 최종 <span class="tnum font-semibold text-slate-100">TQQQ ${L.weight_pct.toFixed(0)}% / ${cashTicker} ${L.cash_pct.toFixed(0)}%</span>
-      </span>`;
-  } else {
-    $(node, 'verdict-sub').innerHTML =
-      `<strong class="text-slate-300">${L.days_since_change}일</strong>째
-       (${L.sessions_since_change} 거래일) 변경 없음.
-       원시 목표가 <strong class="tnum text-slate-300">${I.release_down_pct.toFixed(0)}%</strong> 아래나
-       <strong class="tnum text-slate-300">${I.release_up_pct.toFixed(0)}%</strong> 위로 가야
-       데드밴드가 풀린다. 이 전략은 연평균 ${S.changes_per_year}회 움직인다 —
-       트라이팟(${tripodStats.changes_per_year}회)보다 훨씬 자주다.`;
-  }
+  // Same order as the Telegram message (scripts/notify.py).
+  const rows = acted ? [
+    { tk: 'TQQQ', side: buying ? 'buy' : 'sell', amt: pp },
+    { tk: cashTicker, side: buying ? 'sell' : 'buy', amt: pp },
+  ] : [];
+  $(node, 'ticket').innerHTML = `
+    <div class="t-meta">변동성 타겟 · ${b.meta}</div>
+    <div class="verdict">${verdict(rows.length, b)}</div>
+    ${acted
+      ? `${orderRows(rows)}
+         <div class="t-sub"><span class="mono">TQQQ ${heldBefore.toFixed(0)}% → <b>${L.weight_pct.toFixed(0)}%</b></span>
+           · 계좌 배수 ${L.leverage.toFixed(2)}x · ${b.exec}</div>`
+      : `<div class="book">TQQQ ${L.weight_pct.toFixed(0)}% <span class="muted">·</span> ${cashTicker} ${L.cash_pct.toFixed(0)}%</div>
+         <div class="t-sub">보유 유지 · 계좌 배수 ${L.leverage.toFixed(2)}x ·
+           <b>${L.days_since_change}일</b>째 그대로 (${L.sessions_since_change}거래일).
+           연평균 ${S.changes_per_year}회 움직인다 — 트라이팟(${tripodStats.changes_per_year}회)보다 훨씬 자주다.</div>`}`;
 
-  $(node, 'alloc').textContent = `TQQQ ${L.weight_pct.toFixed(0)}% / ${cashTicker} ${L.cash_pct.toFixed(0)}%`;
-  $(node, 'alloc').style.color = L.color;
-  $(node, 'lev').textContent = `계좌 배수 ${L.leverage.toFixed(2)}x`;
+  $(node, 'exec-note').textContent = b.now
+    ? '판정일 → 체결일. 장중 판정은 같은 날 종가에 체결'
+    : '판정일 → 체결일. 체결은 판정 다음 거래일';
 
-  // 장중 판정 배지. 15:45 ET 시세로 판정하면 그 종가에 체결할 수 있어 MDD가
-  // 배수 1당 8pp 얕아진다(ADR 0005). 확정 종가 판정과 반드시 구분해서 보여준다 —
-  // 어떤 가격으로 정해진 신호인지 모르면 언제 체결해야 하는지도 알 수 없다.
-  const execNote = $(node, 'exec-note');
-  if (execNote) {
-    execNote.textContent = (L.provisional && prov && prov.same_session_fill)
-      ? '15:45 ET 시세 기준 → 같은 날 종가에 체결'
-      : '판정일 종가 기준 → 체결은 다음 거래일';
-  }
-
-  const pvNode = $(node, 'provisional');
-  if (pvNode) {
-    if (L.provisional && prov) {
-      const at = (prov.taken_at_et || '').slice(11, 16);
-      pvNode.innerHTML = prov.same_session_fill
-        ? `<span class="text-amber-300">● 장중 ${at} ET 시세 기준</span> — 지금 시장가로 체결 (MOC 마감 15:50)`
-        : `<span class="text-amber-300">● 장중 ${at} ET 시세 기준</span> — 체결 시각을 놓쳤다. 다음 거래일에 체결`;
-      pvNode.classList.remove('hidden');
-    } else {
-      pvNode.innerHTML = `<span class="text-slate-500">● 확정 종가 기준</span> — 다음 거래일 종가에 체결`;
-      pvNode.classList.remove('hidden');
-    }
-  }
-
-  const chip = $(node, 'band-chip');
-  chip.textContent = L.band_ko;
-  chip.style.color = L.color;
-  chip.style.borderColor = L.color + '66';
-  chip.style.background = L.color + '14';
-
-  /* three inputs */
-  const lens = P.ma_lengths;
   /* The vote counts LATCHED legs, not raw comparisons. Inside the ±1% band a leg
      keeps its old state, so a leg can read "on" while price sits just below its
      MA — mark those so the vote never looks like an arithmetic error. */
-  const maList = lens.map(n => {
-    const k = String(n);
-    const on = I.legs?.[k] ?? I.ma_above[k];
-    const carried = I.legs && I.legs[k] !== I.ma_above[k];
-    return `${n}일 <span class="${on ? 'text-emerald-400' : 'text-slate-600'}">${on ? '켜짐' : '꺼짐'}</span>` +
-           `<span class="text-slate-600">${I.ma_dist_pct ? ` ${pct(I.ma_dist_pct[k], 1)}` : ''}${carried ? '*' : ''}</span>`;
-  }).join(' · ');
-  const anyCarried = I.legs && lens.some(n => I.legs[String(n)] !== I.ma_above[String(n)]);
-  const heldBefore = 100 * L.prev_weight;
+  const lens = P.ma_lengths;
+  const carried = n => I.legs && I.legs[String(n)] !== I.ma_above[String(n)];
+  const chips = lens.map(n => {
+    const on = I.legs?.[String(n)] ?? I.ma_above[String(n)];
+    return `<span class="leg ${on ? 'on' : ''}">${n}${carried(n) ? '*' : ''}</span>`;
+  }).join('');
+  const dists = lens.map(n => `${n}일 ${pct(I.ma_dist_pct[String(n)], 1)}${carried(n) ? '*' : ''}`).join(' · ');
+  const anyCarried = lens.some(carried);
+
   /* The deadband is tested against the SNAPPED target, not the raw number, so
      that is the gap to report. Raw 98.3% snaps to 100%, which is 10pp from a
      held 90% and therefore releases — quoting the raw gap (8pp) would look like
-     it fired below its own threshold. */
+     it fired below its own threshold. The band is measured against what was
+     held BEFORE today's decision. */
   const snappedPct = Math.round(I.raw_pct / I.step_pp) * I.step_pp;
   const gapPct = Math.abs(snappedPct - heldBefore);
+  const rv100 = I.vote * I.target_vol_pct / 3;  // realised vol at which raw hits 100%
 
   $(node, 'inputs').innerHTML = [
-    gauge({
-      title: '추세 투표 · 방향', why: `${lens.join('/')}일선 중 몇 개가 켜졌나`,
-      value: `${I.above}/${I.of}`, unit: '', lo: 0, hi: 1, cursor: I.vote,
-      marks: [{ v: 0.5, color: '#f59e0b' }],
-      ok: I.vote >= 0.5, okLabel: '추세', badLabel: '약세',
-      note: maList + (anyCarried
-        ? `<br><span class="text-slate-600">* ±${I.ma_band_pct}% 밴드 안이라 직전 상태 유지</span>` : ''),
+    gaugeRow({
+      label: '추세 투표', state: I.vote >= 0.5 ? '추세' : '약세', on: I.vote < 0.5,
+      value: `${I.above}/${I.of}`, extra: `<div class="legs">${chips}</div>`,
+      cap: `켜진 이동평균 수 · ${dists}${anyCarried ? `<br>* ±${I.ma_band_pct}% 밴드 안이라 직전 상태 유지` : ''}`,
     }),
-    gauge({
-      title: '실현변동성 · 속도', why: `${P.vol_windows.join('·')}일 표준편차 평균`,
-      value: I.rvol_pct.toFixed(1), unit: '%', lo: 5, hi: 60, cursor: I.rvol_pct,
-      marks: [{ v: 25, color: '#f59e0b' }, { v: 40, color: '#dc2626' }],
-      ok: I.rvol_pct < 25, okLabel: '평온', badLabel: '높음',
-      note: `높을수록 비중이 줄어든다. 3배 ETF의 변동성 감쇠는<br>−3σ²라서 변동성에 제곱으로 비례한다.`,
+    gaugeRow({
+      label: '실현변동성', state: I.vote ? `원시 목표 ${I.raw_pct.toFixed(1)}%` : '투표 0 → 비중 0%', on: false,
+      value: `${I.rvol_pct.toFixed(1)}%`,
+      /* No threshold in the rule: the weight is continuous. The useful cuts are
+         where today's vote would put the raw target at 100% and at 50%. */
+      gauge: zoneGauge({
+        lo: 0, hi: Math.max(60, I.rvol_pct + 5),
+        cuts: I.vote ? [rv100, rv100 * 2] : [],
+        names: I.vote ? ['목표 100%', '50~100%', '50% 미만'] : ['투표 0이라 비중 0%'],
+        cursor: I.rvol_pct, now: `${I.rvol_pct.toFixed(1)}%`, unit: '%', digits: 1,
+      }),
+      cap: `${P.vol_windows.join('·')}일 표준편차 평균. 원시 목표 = 투표 ${I.vote.toFixed(2)} × ${I.target_vol_pct}% ÷ (3 × 변동성)이라 왼쪽일수록 비중이 크다.${I.vote ? ` 지금 투표로는 ${rv100.toFixed(1)}% 아래면 100%, ${(rv100 * 2).toFixed(1)}%면 50%.` : ''}`,
     }),
-    gauge({
-      /* The band is measured against what was held BEFORE today's decision. On
-         a day that fires, comparing against the new weight would show a 2pp gap
-         and make the trade look unmotivated. */
-      title: '데드밴드 · 관성', why: '원시 목표가 보유에서 얼마나 벌어졌나',
-      value: I.raw_pct.toFixed(0), unit: '%', lo: 0, hi: 100, cursor: I.raw_pct,
-      marks: [{ v: heldBefore, color: '#dc2626' }],
-      ok: !acted, okLabel: '유지', badLabel: '해제',
-      note: acted
-        ? `원시 ${I.raw_pct.toFixed(0)}% → ${I.step_pp}%p 격자 ${snappedPct.toFixed(0)}%,
-           보유 ${heldBefore.toFixed(0)}%와 ${gapPct.toFixed(0)}%p 차 —
-           <strong class="text-amber-400">${I.band_pp}%p 이상이라 해제</strong>`
-        : `흰 눈금 = 원시 목표 ${I.raw_pct.toFixed(0)}% · 붉은 눈금 = 보유 ${heldBefore.toFixed(0)}%<br>
-           격자 ${snappedPct.toFixed(0)}%와 ${gapPct.toFixed(0)}%p 차 · ${I.band_pp}%p 넘으면 조정`,
+    gaugeRow({
+      label: '목표 비중', state: acted ? '데드밴드 해제' : '데드밴드 유지', on: acted,
+      value: `${I.raw_pct.toFixed(1)}% → ${snappedPct.toFixed(0)}% → <b>${L.weight_pct.toFixed(0)}%</b>`,
+      gauge: zoneGauge({
+        lo: 0, hi: 100, cuts: [heldBefore - I.band_pp, heldBefore + I.band_pp],
+        names: ['줄인다', `${heldBefore.toFixed(0)}% 유지`, '늘린다'],
+        cursor: snappedPct, now: `격자 ${snappedPct.toFixed(0)}%`, unit: '%',
+      }),
+      cap: acted
+        ? `원시 ${I.raw_pct.toFixed(1)}% → ${I.step_pp}%p 격자 ${snappedPct.toFixed(0)}%. 어제 보유 ${heldBefore.toFixed(0)}%와 ${gapPct.toFixed(0)}%p 차라 <b>${I.band_pp}%p 데드밴드를 벗어났다</b>.`
+        : `원시 ${I.raw_pct.toFixed(1)}% → ${I.step_pp}%p 격자 ${snappedPct.toFixed(0)}%. 보유 ${heldBefore.toFixed(0)}% ±${I.band_pp}%p 안이라 그대로 둔다. 격자 목표가 가운데 구간을 벗어나야 주문이 나온다.`,
     }),
   ].join('');
 
-  /* the arithmetic, spelled out */
-  const chunk = (label, value) =>
-    `<div class="flex items-baseline justify-between gap-3 border-b border-slate-800/60 py-1.5">
-       <span class="text-slate-400">${label}</span>
-       <span class="shrink-0 font-medium text-slate-200">${value}</span></div>`;
+  const step = (label, value) => `<div class="row-h"><span>${label}</span><span class="mono">${value}</span></div>`;
   $(node, 'math').innerHTML =
-    chunk('추세 투표 (켜진 이동평균 수)', `${I.above} / ${I.of} = ${I.vote.toFixed(2)}`) +
-    chunk('목표 변동성 ÷ (3배 × 실현변동성)',
-          `${I.target_vol_pct}% ÷ (3 × ${I.rvol_pct.toFixed(1)}%) = ${(I.target_vol_pct / (3 * I.rvol_pct)).toFixed(2)}`) +
-    chunk('원시 목표 = 투표 × 위 값', `${I.raw_pct.toFixed(1)}%`) +
-    chunk(`${I.step_pp}%p 격자로 반올림`, `${(Math.round(I.raw_pct / I.step_pp) * I.step_pp).toFixed(0)}%`) +
-    chunk(`데드밴드(${I.band_pp}%p) 적용 후 <strong class="text-slate-300">실행 비중</strong>`,
-          `<strong style="color:${L.color}">TQQQ ${L.weight_pct.toFixed(0)}%</strong>`);
+    step('추세 투표 (켜진 이동평균 수)', `${I.above} / ${I.of} = ${I.vote.toFixed(2)}`) +
+    step('목표 변동성 ÷ (3배 × 실현변동성)',
+         `${I.target_vol_pct}% ÷ (3 × ${I.rvol_pct.toFixed(1)}%) = ${(I.target_vol_pct / (3 * I.rvol_pct)).toFixed(2)}`) +
+    step('원시 목표 = 투표 × 위 값', `${I.raw_pct.toFixed(1)}%`) +
+    step(`${I.step_pp}%p 격자로 반올림`, `${snappedPct.toFixed(0)}%`) +
+    step(`데드밴드(${I.band_pp}%p) 적용 후 실행 비중`, `<b>TQQQ ${L.weight_pct.toFixed(0)}%</b>`);
 
-  /* chart */
-  const c = weightChart(st.series, null);
-  if (c) { $(node, 'chart').innerHTML = c.svg; $(node, 'xaxis').innerHTML = c.axis; }
+  chartBox(node, 'voltarget', st.series, null);
   $(node, 'legend').innerHTML =
-    `<span class="inline-flex items-center gap-1.5 whitespace-nowrap">
-       <span class="h-2.5 w-2.5 rounded-sm bg-red-600/40"></span>TQQQ 목표 비중
-       <span class="tnum text-slate-600">평균 ${S.avg_weight_pct}%</span></span>
-     <span class="inline-flex items-center gap-1.5 whitespace-nowrap">
-       <span class="h-2.5 w-2.5 rounded-sm" style="background:#64748b"></span>전량 ${cashTicker}
-       <span class="tnum text-slate-600">${S.fully_cash_pct}%</span></span>
-     <span class="tnum whitespace-nowrap text-slate-600">평균 배수 ${S.avg_leverage}x</span>`;
+    `<span class="nowrap"><i style="background:var(--lev-15)"></i>TQQQ 목표 비중 <span class="mono">평균 ${S.avg_weight_pct}%</span></span>
+     <span class="nowrap">전량 ${cashTicker} <span class="mono">${S.fully_cash_pct}%</span></span>
+     <span class="nowrap">평균 배수 <span class="mono">${S.avg_leverage}x</span></span>
+     <span class="nowrap"><b class="buy">▲</b> 비중 증가 <b class="sell">▼</b> 비중 감소</span>`;
 
-  /* events */
-  $(node, 'events').innerHTML = st.events.filter(e => e.from !== null).slice(-12).reverse().map(e => {
+  $(node, 'events').innerHTML = st.events.filter(e => e.from !== null).slice(-6).reverse().map(e => {
     const up = e.delta > 0;
-    const tone = up ? 'text-emerald-400' : 'text-amber-400';
-    return `<tr class="border-b border-slate-800/60 last:border-0">
-      <td class="tnum py-2 pr-3 text-slate-400">${e.date}</td>
-      <td class="tnum py-2 pr-3 text-slate-300">${e.exec_date
-        ?? '<span class="text-amber-400">다음 거래일</span>'}</td>
-      <td class="tnum py-2 pr-3">
-        <span class="text-slate-500">${(e.from * 100).toFixed(0)}%</span>
-        <span class="text-slate-600">→</span>
-        <span class="font-semibold text-slate-200">${(e.to * 100).toFixed(0)}%</span>
-      </td>
-      <td class="tnum py-2 pr-1 whitespace-nowrap text-xs ${tone}">
-        ${up ? '↑ 매수' : '↓ 매도'} ${Math.abs(e.delta * 100).toFixed(0)}%p</td>
-    </tr>`;
+    return `<li class="hist">
+      <div class="hist-d mono">${e.date} <span class="muted">→ ${shortExec(e)}</span></div>
+      <div class="hist-c"><span class="mono">${(e.from * 100).toFixed(0)} → <b>${(e.to * 100).toFixed(0)}%</b></span>
+        <span class="side ${up ? 'buy' : 'sell'}">${up ? '매수' : '매도'} ${Math.abs(e.delta * 100).toFixed(0)}%p</span></div></li>`;
   }).join('');
 
   /* honest tradeoff against the other tab */
   $(node, 'tradeoff').innerHTML = `
-    <p><strong class="text-amber-200/80">손이 훨씬 많이 간다.</strong>
-      연 <span class="tnum">${S.changes_per_year}회</span> 움직인다. 트라이팟은
-      <span class="tnum">${tripodStats.changes_per_year}회</span>다. 최장 무변경 구간도
-      <span class="tnum">${S.longest_no_change_days}일</span> vs
-      <span class="tnum">${tripodStats.longest_no_change_days}일</span>이다.
+    <p><b>손이 훨씬 많이 간다.</b>
+      연 <span class="mono">${S.changes_per_year}회</span> 움직인다. 트라이팟은
+      <span class="mono">${tripodStats.changes_per_year}회</span>다. 최장 무변경 구간도
+      <span class="mono">${S.longest_no_change_days}일</span> vs
+      <span class="mono">${tripodStats.longest_no_change_days}일</span>이다.
       “매일 볼 이유가 없다”는 트라이팟의 장점이 여기서는 성립하지 않는다.</p>
-    <p><strong class="text-amber-200/80">과세계좌에서는 단순보유에 진다.</strong>
-      로트 단위로 세금을 계산해 보면 드래그가 <span class="tnum">3.6~4.6pp</span>다.
-      목표 변동성 35%는 세전 16.8%가 세후 <span class="tnum">13.2%</span>가 되어
-      레버리지 없는 나스닥 단순보유(<span class="tnum">14.2%</span>)보다 낮다.
-      <strong class="text-slate-300">회전을 줄여도 해결되지 않는다</strong> — 데드밴드를
+    <p><b>과세계좌에서는 단순보유에 진다.</b>
+      로트 단위로 세금을 계산해 보면 드래그가 <span class="mono">3.6~4.6pp</span>다.
+      목표 변동성 35%는 세전 16.8%가 세후 <span class="mono">13.2%</span>가 되어
+      레버리지 없는 나스닥 단순보유(<span class="mono">14.2%</span>)보다 낮다.
+      <b>회전을 줄여도 해결되지 않는다</b> — 데드밴드를
       넓혀 회전을 4.5배 줄여도 드래그는 3.64→3.09pp뿐이고(세금은 거래 <em>횟수</em>가
       아니라 실현이익 <em>금액</em>에 비례한다) 추적이 나빠져 MDD가 −54.6%→−75.6%로
-      무너진다. 답은 파라미터가 아니라 계좌다: <strong class="text-slate-300">IRA·401k에서
-      돌리면 16.7%</strong>(+3.54pp)로, 측정한 모든 레버 중 가장 크다.</p>
-    <p><strong class="text-amber-200/80">변동성은 뒤를 본다.</strong>
+      무너진다. 답은 파라미터가 아니라 계좌다: <b>IRA·401k에서
+      돌리면 16.7%</b>(+3.54pp)로, 측정한 모든 레버 중 가장 크다.</p>
+    <p><b>변동성은 뒤를 본다.</b>
       ${P.vol_windows.join('·')}일 창이라 급락 <em>이후에</em> 비중을 줄인다.
       1987년·2020년 같은 갭 하락의 첫 방은 그대로 맞는다.</p>
-    <p><strong class="text-amber-200/80">히스테리시스는 트라이팟에서 빌려왔다.</strong>
+    <p><b>히스테리시스는 트라이팟에서 빌려왔다.</b>
       이동평균 4개 각각에 ±${I.ma_band_pct}% 밴드를 둬 밴드 안에서는 직전 상태를 유지한다.
       이게 없으면 이동평균 하나를 스치는 것만으로 목표가 25%p 움직여 데드밴드를 뚫고,
       50일선 근처에서 하루 만에 45%p를 왕복한다. 넣으면 같은 주 내 반전이 95회 → 9회로 줄고
       낙폭은 오히려 좋아진다. 성과를 위한 손질이 아니라 <em>운용 가능성</em>을 산 것이다.</p>
-    <p><strong class="text-amber-200/80">VIX를 쓰지 않는다.</strong>
-      그래서 히스토리가 트라이팟보다 4년 길고(<span class="tnum">${S.span_years}년</span> vs
-      <span class="tnum">${tripodStats.span_years}년</span>) CBOE 파일에 의존하지 않는다.</p>`;
+    <p><b>VIX를 쓰지 않는다.</b>
+      그래서 히스토리가 트라이팟보다 4년 길고(<span class="mono">${S.span_years}년</span> vs
+      <span class="mono">${tripodStats.span_years}년</span>) CBOE 파일에 의존하지 않는다.</p>`;
 
   $(node, 'params').innerHTML = [
-    dash('기준 지수', '^NDX (나스닥100)', false),
-    dash('추세 이동평균', `${P.ma_lengths.join(' / ')}일 ${P.ma_kind.toUpperCase()}`, false),
-    dash('이동평균 밴드', `±${(P.ma_band * 100).toFixed(0)}% (직전 상태 유지)`, false),
-    dash('변동성 창', `${P.vol_windows.join(' / ')}일 표준편차 평균`, false),
-    dash('목표 변동성', `${(P.target_vol * 100).toFixed(0)}%`, true),
-    dash('대상 ETF 배수', `${P.etf_leverage}x (TQQQ)`, false),
-    dash('최대 비중', `${(P.max_weight * 100).toFixed(0)}%`, false),
-    dash('비중 격자', `${(P.weight_step * 100).toFixed(0)}%p`, false),
-    dash('리밸런싱 밴드', `${(P.rebalance_band * 100).toFixed(0)}%p`, false),
-    dash('변동성 하한', `${(P.vol_floor * 100).toFixed(0)}%`, false),
-    dash('체결', '판정 다음 거래일', false),
-    dash('평균 비중', `${S.avg_weight_pct}% (배수 ${S.avg_leverage}x)`, false),
-    dash(`전량 ${cashTicker} 비율`, `${S.fully_cash_pct}% of ${S.sessions}거래일`, false),
+    kv('기준 지수', '^NDX'),
+    kv('추세 이동평균', `${P.ma_lengths.join('/')}일 ${P.ma_kind.toUpperCase()}`),
+    kv('이동평균 밴드', `±${(P.ma_band * 100).toFixed(0)}%`),
+    kv('변동성 창', `${P.vol_windows.join('/')}일`),
+    kv('목표 변동성', `${(P.target_vol * 100).toFixed(0)}%`, true),
+    kv('대상 ETF 배수', `${P.etf_leverage}x (TQQQ)`),
+    kv('최대 비중', `${(P.max_weight * 100).toFixed(0)}%`),
+    kv('비중 격자', `${(P.weight_step * 100).toFixed(0)}%p`),
+    kv('리밸런싱 밴드', `${(P.rebalance_band * 100).toFixed(0)}%p`),
+    kv('변동성 하한', `${(P.vol_floor * 100).toFixed(0)}%`),
+    kv('체결', '판정 다음 거래일'),
+    kv('평균 비중', `${S.avg_weight_pct}% (${S.avg_leverage}x)`),
+    kv(`전량 ${cashTicker} 비율`, `${S.fully_cash_pct}%`),
   ].join('');
 
   return node;
@@ -795,40 +792,33 @@ function renderVolTarget(st, tripodStats, root) {
 
 /* ── shell + routing ─────────────────────────────────────────────── */
 const RENDERERS = {
-  tripod: d => renderTripod(d.strategies.tripod),
+  tripod: d => renderTripod(d.strategies.tripod, d),
   voltarget: d => renderVolTarget(d.strategies.voltarget, d.strategies.tripod.stats, d),
 };
 
 function render(d, key) {
   const nav = d.nav ?? [{ key: 'tripod', ko: '트라이팟' }];
   const active = RENDERERS[key] ? key : nav[0].key;
-
   const shell = document.getElementById('tpl-shell').content.cloneNode(true);
+  const L = d.strategies[active].latest;
+  const b = basis(L, d.provisional);
 
-  const tLast = d.strategies.tripod.latest.date;
-  const vLast = d.strategies.voltarget.latest.date;
-  const judged = active === 'tripod' ? tLast : vLast;
-  $(shell, 'stamp').textContent =
-    `판정 ${judged} 종가 · 갱신 ${d.generated_at.slice(0, 16).replace('T', ' ')}Z`;
+  $(shell, 'stamp').textContent = b.live ? `${L.date.slice(5)} ${b.at} ET 장중` : `${L.date} 종가`;
+  $(shell, 'generated').textContent = `데이터 갱신 ${d.generated_at.slice(0, 16).replace('T', ' ')}Z`;
+  $(shell, 'banner').innerHTML = staleBanner(L.date);
 
   /* Nav doubles as the alert surface: a tab whose strategy wants a trade today
      carries a dot, so switching tabs is never how you find out. */
   $(shell, 'nav').innerHTML = nav.map(s => {
-    const on = s.key === active;
-    const st = d.strategies[s.key];
-    const alert = st?.latest?.action_required;
-    return `<a href="#${s.key}"
-      class="-mb-px flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors
-             ${on ? 'border-slate-200 font-semibold text-slate-100'
-                  : 'border-transparent text-slate-500 hover:border-slate-700 hover:text-slate-300'}"
-      ${on ? 'aria-current="page"' : ''}>
-      ${s.ko}
-      ${alert ? `<span class="h-1.5 w-1.5 rounded-full bg-red-500" title="리밸런싱 필요"></span>` : ''}
-    </a>`;
+    const alert = d.strategies[s.key]?.latest?.action_required;
+    return `<a class="tab" href="#${s.key}" ${s.key === active ? 'aria-current="page"' : ''}>${s.ko}${
+      alert ? '<i class="dot" title="주문 있음"></i>' : ''}</a>`;
   }).join('');
 
+  charts.length = 0;
   $(shell, 'body').replaceChildren(RENDERERS[active](d));
   app.replaceChildren(shell);
+  charts.forEach(drawChart);
 }
 
 const currentKey = () => (location.hash || '').replace(/^#/, '');
@@ -842,12 +832,15 @@ const isFile = location.protocol === 'file:';
 function boot(d) {
   render(d, currentKey());
   addEventListener('hashchange', () => render(d, currentKey()));
+  let t;
+  addEventListener('resize', () => { clearTimeout(t); t = setTimeout(() => charts.forEach(drawChart), 100); });
+  document.fonts?.ready.then(() => charts.forEach(drawChart));
 }
 
 if (isFile) {
   embedded
     ? boot(embedded)
-    : fail('data/signal.js 를 찾을 수 없다. <code class="text-slate-300">python scripts/signal.py</code> 를 실행해 생성하라.');
+    : fail('data/signal.js 를 찾을 수 없다. <code>python scripts/signal.py</code> 를 실행해 생성하라.');
 } else {
   fetch(`data/signal.json?v=${Date.now()}`)
     .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))

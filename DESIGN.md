@@ -132,7 +132,8 @@ Telegram alert around 15:45 ET, which is midday Pacific, and opens the page on a
 - Reference (params, validation, differences): Read, quiet.
 
 **Key characteristics:**
-- The first thing visible is the verdict: `오늘 주문 없음` or `오늘 주문 N건`.
+- The first thing visible is the verdict: `주문 없음` or `주문 N건`, prefixed with `오늘`
+  only when the order goes into today's close (intraday judgement before 15:50 ET).
 - Red and blue appear only where something is bought or sold.
 - Leverage reads as ink density, light for cash and dark for 3x.
 - One container on the page, the ticket. Everything else is separated by hairlines.

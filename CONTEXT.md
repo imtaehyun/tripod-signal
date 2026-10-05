@@ -219,6 +219,7 @@ number.
 
 ## Weight band / 비중 구간
 
-A colour bucket for the weight (`현금 / 소액 / 중간 / 적극`), used by the chart
-and the today card. Purely presentational — no rule reads it. Do not confuse it
-with Tripod's Gear, which *is* the rule's output.
+A colour bucket for the weight (`현금 / 소액 / 중간 / 적극`), still emitted in
+`signal.json` but no longer rendered: the dashboard shows leverage as ink density
+(DESIGN.md). Purely presentational — no rule reads it. Do not confuse it with
+Tripod's Gear, which *is* the rule's output.
