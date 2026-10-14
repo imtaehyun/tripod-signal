@@ -69,18 +69,23 @@ jobs:
       # actually in the session (a holiday, or a manual dispatch off-hours).
       # `outcome=skip` short-circuits every later step but still lets the
       # notifier explain why nothing was sent.
+      # The outputs are written to $GITHUB_OUTPUT directly, NOT by redirecting
+      # stdout: quote and fetch print progress (the sleep to 15:45, Yahoo
+      # retries) and any line that is not key=value fails the step. ADR 0006
+      # made the sleep happen every day, so this failed every day.
       - name: Wait for the 15:45 ET window
         id: window
         if: steps.mode.outputs.mode == 'intraday'
         run: |
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import sys; sys.path.insert(0, "scripts")
+          python - <<'PY'
+          import os, sys; sys.path.insert(0, "scripts")
           import quote
           state = quote.wait_for_window()
           p = quote.provisional()
-          print(f"state={state}")
-          print(f"go={'true' if p['usable'] else 'false'}")
-          print(f"reason={state}/fresh={p['fresh']}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"state={state}\n")
+              out.write(f"go={'true' if p['usable'] else 'false'}\n")
+              out.write(f"reason={state}/fresh={p['fresh']}\n")
           PY
 
       - name: Skip note
